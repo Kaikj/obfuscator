@@ -33,6 +33,7 @@
 #include "llvm/Transforms/Obfuscation/Flattening.h"
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/Substitution.h"
+#include "llvm/Transforms/Obfuscation/DeadCodeInsertion.h"
 #include "llvm/CryptoUtils.h"
 
 using namespace llvm;
@@ -99,6 +100,9 @@ static cl::opt<std::string> AesSeed("aesSeed", cl::init(""),
 
 static cl::opt<bool> Split("spli", cl::init(false),
                            cl::desc("Enable basic block splitting"));
+
+static cl::opt<bool> DeadCodeInsertion("dci", cl::init(false),
+                           cl::desc("Enable dead code insertion"));
 
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
@@ -190,6 +194,7 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
   MPM.add(createSplitBasicBlock(Split));
   MPM.add(createBogus(BogusControlFlow));
   MPM.add(createFlattening(Flattening));
+  MPM.add(createDeadCodeInsertion(DeadCodeInsertion));
     
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
