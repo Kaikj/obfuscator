@@ -23,7 +23,7 @@ namespace {
 		}
 		bool runOnFunction(Function &F);
 		void insertDeadCode(Function *F);
-		void insertDeadIf(Function *f);
+		void insertJumps(Function *f);
 		void addZero(BinaryOperator *bo);
 		void subZero(BinaryOperator *bo);
 	};
@@ -40,7 +40,7 @@ bool DeadCodeInsertion::runOnFunction(Function &F) {
 	Function *tmp = &F;
 	if (toObfuscate(flag, tmp, "dci")) {
 		//insertDeadCode(tmp);
-		insertDeadBlocks(tmp);
+		insertJumps(tmp);
   	}
 	return false;
 }
@@ -96,7 +96,7 @@ void DeadCodeInsertion::addZero(BinaryOperator *bo){
 
 
 
-void DeadCodeInsertion::insertDeadBlocks(Function *f){
+void DeadCodeInsertion::insertJumps(Function *f){
 	std::vector<BasicBlock *> origBB;
 
 	// Save all basic blocks
@@ -117,8 +117,11 @@ void DeadCodeInsertion::insertDeadBlocks(Function *f){
 		// Split
 		BasicBlock *toSplit = bb;
 		toSplit = toSplit->splitBasicBlock(bb->begin(), "test2");
+		BasicBlock::iterator inst = std::next(toSplit->begin(), 5);
+		toSplit = toSplit->splitBasicBlock(inst, "test3");
 		BasicBlock *unusedBlock = BasicBlock::Create(bb->getContext(), "unused", f, toSplit);
 		unusedBlock = unusedBlock->splitBasicBlock(unusedBlock->begin(), "unused2");
+		
 
 	}
 }
