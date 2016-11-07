@@ -18,14 +18,14 @@ namespace {
 		DeadCodeInsertion(bool flag) : FunctionPass(ID) {
 			this->flag = flag;
 			funcDeadCodeInsert[0] = &DeadCodeInsertion::addZero;
-//			funcDeadCodeInsert[1] = &DeadCodeInsertion::addIf;
 			opcodeList[0] = Instruction::Add;
 			opcodeList[1] = Instruction::Sub;
 		}
 		bool runOnFunction(Function &F);
 		void insertDeadCode(Function *F);
+		void insertDeadIf(Function *f);
 		void addZero(BinaryOperator *bo);
-		void addIf(BinaryOperator *bo);
+		void subZero(BinaryOperator *bo);
 	};
 }
 
@@ -39,7 +39,8 @@ Pass *llvm::createDeadCodeInsertion(bool flag) {
 bool DeadCodeInsertion::runOnFunction(Function &F) {
 	Function *tmp = &F;
 	if (toObfuscate(flag, tmp, "dci")) {
-		insertDeadCode(tmp);
+		//insertDeadCode(tmp);
+		insertDeadBlocks(tmp);
   	}
 	return false;
 }
@@ -49,16 +50,17 @@ void DeadCodeInsertion::insertDeadCode(Function *f) {
 	for (Function::iterator bb = tmp->begin(); bb != tmp->end(); ++bb) {
 	      for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
 			if (inst->isBinaryOp()) {
-				switch (inst->getOpcode()) {
-				case BinaryOperator::Add:
-				case BinaryOperator::Sub:
-					// case BinaryOperator::FAdd:
-					// Substitute with random add operation
-					(this->*funcDeadCodeInsert[llvm::cryptoutils->get_range(NUMBER_DCI)])(cast<BinaryOperator>(inst));
-					break;
-				default:
-					break;
-			  	}              // End switch
+				  switch (inst->getOpcode()) {
+				  case BinaryOperator::Add:
+				  case BinaryOperator::Sub:
+				    // case BinaryOperator::FAdd:
+				    // Substitute with random add operation
+				    (this->*funcDeadCodeInsert[llvm::cryptoutils->get_range
+					(NUMBER_DCI)])(cast<BinaryOperator>(inst));
+				    break;
+				  default:
+				    break;
+				  }              // End switch
 			}                // End isBinaryOp
 		}                  // End for basickblock
 	}                    // End for Function
@@ -92,6 +94,33 @@ void DeadCodeInsertion::addZero(BinaryOperator *bo){
 	//bo->replaceAllUsesWith(op);
 }
 
-void DeadCodeInsertion::addIf(BinaryOperator *bo){
+
+
+void DeadCodeInsertion::insertDeadBlocks(Function *f){
+	std::vector<BasicBlock *> origBB;
+
+	// Save all basic blocks
+	for (Function::iterator I = f->begin(), IE = f->end(); I != IE; ++I) {
+		origBB.push_back(I);
+	}
+	IntegerType *int_type = Type::getInt32Ty(llvm::getGlobalContext());
+	
+	for (std::vector<BasicBlock *>::iterator I = origBB.begin(), IE = origBB.end(); I != IE; ++I) {
+		BasicBlock *bb = *I;
+		//for each block
+		
+		// No need to split a 1 inst bb
+		// Or ones containing a PHI node
+		if (bb->size() < 2 ) {
+			continue;
+		}
+		// Split
+		BasicBlock *toSplit = bb;
+		toSplit = toSplit->splitBasicBlock(bb->begin(), "test2");
+		BasicBlock *unusedBlock = BasicBlock::Create(bb->getContext(), "unused", f, toSplit);
+		unusedBlock = unusedBlock->splitBasicBlock(unusedBlock->begin(), "unused2");
+
+	}
 }
+
 
