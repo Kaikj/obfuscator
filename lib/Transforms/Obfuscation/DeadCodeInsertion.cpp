@@ -111,17 +111,29 @@ void DeadCodeInsertion::insertJumps(Function *f){
 		
 		// No need to split a 1 inst bb
 		// Or ones containing a PHI node
-		if (bb->size() < 2 ) {
-			continue;
-		}
 		// Split
 		BasicBlock *toSplit = bb;
-		toSplit = toSplit->splitBasicBlock(bb->begin(), "test2");
-		BasicBlock::iterator inst = std::next(toSplit->begin(), 5);
-		toSplit = toSplit->splitBasicBlock(inst, "test3");
-		BasicBlock *unusedBlock = BasicBlock::Create(bb->getContext(), "unused", f, toSplit);
-		unusedBlock = unusedBlock->splitBasicBlock(unusedBlock->begin(), "unused2");
-		
+		int toContinue;
+		do {
+			if (toSplit->size() < 2 ) {
+				break;
+			}
+			BasicBlock::iterator inst = std::next(toSplit->begin(), llvm::cryptoutils->get_range(toSplit->size()/2));
+			toSplit = toSplit->splitBasicBlock(inst, "original");
+			//Definitely insert unused block at first try
+			int toInsertUnusedBlock = 1;
+			if (toInsertUnusedBlock) {
+				BasicBlock *unusedBlock = BasicBlock::Create(bb->getContext(), "unused", f, toSplit);
+				//75% chance of inserting additional unused block
+				toInsertUnusedBlock = llvm::cryptoutils->get_range(4);
+				while (toInsertUnusedBlock) {
+					unusedBlock = unusedBlock->splitBasicBlock(unusedBlock->begin(), "unused");			
+					toInsertUnusedBlock = llvm::cryptoutils->get_range(2);	
+				}			
+			}
+			//80% chance to continue
+			toContinue = llvm::cryptoutils->get_range(5);
+		} while (toContinue);
 
 	}
 }
