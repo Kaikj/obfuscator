@@ -3,6 +3,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Obfuscation/Utils.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/Support/Debug.h"
 #include <iostream>
 
 #define DEBUG_TYPE "dci"
@@ -26,6 +27,7 @@ namespace {
 		void insertJumps(Function *f);
 		void addZero(BinaryOperator *bo);
 		void subZero(BinaryOperator *bo);
+		BasicBlock* createAlteredBasicBlock(BasicBlock*, const Twine&, Function*);
 	};
 }
 
@@ -103,7 +105,6 @@ void DeadCodeInsertion::insertJumps(Function *f){
 	for (Function::iterator I = f->begin(), IE = f->end(); I != IE; ++I) {
 		origBB.push_back(I);
 	}
-	IntegerType *int_type = Type::getInt32Ty(llvm::getGlobalContext());
 	
 	for (std::vector<BasicBlock *>::iterator I = origBB.begin(), IE = origBB.end(); I != IE; ++I) {
 		BasicBlock *bb = *I;
@@ -119,23 +120,231 @@ void DeadCodeInsertion::insertJumps(Function *f){
 				break;
 			}
 			BasicBlock::iterator inst = std::next(toSplit->begin(), llvm::cryptoutils->get_range(toSplit->size()/2));
-			toSplit = toSplit->splitBasicBlock(inst, "original");
+			BasicBlock *newBlock = toSplit->splitBasicBlock(inst, "original");
 			//Definitely insert unused block at first try
 			int toInsertUnusedBlock = 1;
 			if (toInsertUnusedBlock) {
-				BasicBlock *unusedBlock = BasicBlock::Create(bb->getContext(), "unused", f, toSplit);
+				createAlteredBasicBlock(toSplit, "unused", f);
+				/*BasicBlock *unusedBlock = BasicBlock::Create(bb->getContext(), "unused", f, toSplit);
 				//75% chance of inserting additional unused block
 				toInsertUnusedBlock = llvm::cryptoutils->get_range(4);
 				while (toInsertUnusedBlock) {
 					unusedBlock = unusedBlock->splitBasicBlock(unusedBlock->begin(), "unused");			
 					toInsertUnusedBlock = llvm::cryptoutils->get_range(2);	
-				}			
+				} */			
 			}
 			//80% chance to continue
+			toSplit = newBlock;
 			toContinue = llvm::cryptoutils->get_range(5);
 		} while (toContinue);
 
 	}
 }
+
+//NOT DONE
+/*
+void fillEmptyBlock(BasicBlock *bb) {
+	BasicBlock *originalBB = bb;
+	IntegerType *int_type = Type::getInt32Ty(originalBB->getContext());
+	for(int random = (int)llvm::cryptoutils->get_range(10); random < 10; ++random){
+	      switch(llvm::cryptoutils->get_range(4)){ // to improve
+		case 0: //do nothing
+		  break;
+		case 1: 
+			ConstantInt *co = (ConstantInt *)ConstantInt::get(int_type, llvm::cryptoutils->get_uint64_t());
+			op = BinaryOperator::CreateNeg(co,*var,originalBB);
+			op1 = BinaryOperator::Create(Instruction::Add,op,
+			    i->getOperand(1),"gen", originalBB);
+			break;
+		case 2: op1 = BinaryOperator::Create(Instruction::Sub,
+			    i->getOperand(0),
+			    i->getOperand(1),*var,originalBB);
+			op = BinaryOperator::Create(Instruction::Mul,op1,
+			    i->getOperand(1),"gen", originalBB);
+			break;
+		case 3: op = BinaryOperator::Create(Instruction::Shl,
+			    i->getOperand(0),
+			    i->getOperand(1),*var,originalBB);
+			break;
+	      }
+	}
+} */
+
+
+//Koped from BogusControlFlow
+BasicBlock* DeadCodeInsertion::createAlteredBasicBlock(BasicBlock* basicBlock, const Twine &  Name = "unused", Function * F = 0){
+      // Useful to remap the informations concerning instructions.
+      ValueToValueMapTy VMap;
+      BasicBlock * alteredBB = llvm::CloneBasicBlock (basicBlock, VMap, "unused", F);
+      DEBUG_WITH_TYPE("gen", errs() << "bcf: Original basic block cloned\n");
+      // Remap operands.
+      BasicBlock::iterator ji = basicBlock->begin();
+      for (BasicBlock::iterator i = alteredBB->begin(), e = alteredBB->end() ; i != e; ++i){
+        // Loop over the operands of the instruction
+        for(User::op_iterator opi = i->op_begin (), ope = i->op_end(); opi != ope; ++opi){
+          // get the value for the operand
+          Value *v = MapValue(*opi, VMap,  RF_None, 0);
+          if (v != 0){
+            *opi = v;
+            DEBUG_WITH_TYPE("gen", errs() << "bcf: Value's operand has been setted\n");
+          }
+        }
+        DEBUG_WITH_TYPE("gen", errs() << "bcf: Operands remapped\n");
+        // Remap phi nodes' incoming blocks.
+        if (PHINode *pn = dyn_cast<PHINode>(i)) {
+          for (unsigned j = 0, e = pn->getNumIncomingValues(); j != e; ++j) {
+            Value *v = MapValue(pn->getIncomingBlock(j), VMap, RF_None, 0);
+            if (v != 0){
+              pn->setIncomingBlock(j, cast<BasicBlock>(v));
+            }
+          }
+        }
+        DEBUG_WITH_TYPE("gen", errs() << "bcf: PHINodes remapped\n");
+        // Remap attached metadata.
+        SmallVector<std::pair<unsigned, MDNode *>, 4> MDs;
+        i->getAllMetadata(MDs);
+        DEBUG_WITH_TYPE("gen", errs() << "bcf: Metadatas remapped\n");
+        // important for compiling with DWARF, using option -g.
+        i->setDebugLoc(ji->getDebugLoc());
+        ji++;
+        DEBUG_WITH_TYPE("gen", errs() << "bcf: Debug information location setted\n");
+
+      } // The instructions' informations are now all correct
+
+      DEBUG_WITH_TYPE("gen", errs() << "bcf: The cloned basic block is now correct\n");
+      DEBUG_WITH_TYPE("gen",
+          errs() << "bcf: Starting to add junk code in the cloned bloc...\n");
+
+      // add random instruction in the middle of the bloc. This part can be improve
+      for (BasicBlock::iterator i = alteredBB->begin(), e = alteredBB->end() ; i != e; ++i){
+        // in the case we find binary operator, we modify slightly this part by randomly
+        // insert some instructions
+        if(i->isBinaryOp()){ // binary instructions
+          unsigned opcode = i->getOpcode();
+          BinaryOperator *op, *op1 = NULL;
+          Twine *var = new Twine("_");
+          // treat differently float or int
+          // Binary int
+          if(opcode == Instruction::Add || opcode == Instruction::Sub ||
+              opcode == Instruction::Mul || opcode == Instruction::UDiv ||
+              opcode == Instruction::SDiv || opcode == Instruction::URem ||
+              opcode == Instruction::SRem || opcode == Instruction::Shl ||
+              opcode == Instruction::LShr || opcode == Instruction::AShr ||
+              opcode == Instruction::And || opcode == Instruction::Or ||
+              opcode == Instruction::Xor){
+            for(int random = (int)llvm::cryptoutils->get_range(10); random < 10; ++random){
+              switch(llvm::cryptoutils->get_range(4)){ // to improve
+                case 0: //do nothing
+                  break;
+                case 1: op = BinaryOperator::CreateNeg(i->getOperand(0),*var,i);
+                        op1 = BinaryOperator::Create(Instruction::Add,op,
+                            i->getOperand(1),"gen",i);
+                        break;
+                case 2: op1 = BinaryOperator::Create(Instruction::Sub,
+                            i->getOperand(0),
+                            i->getOperand(1),*var,i);
+                        op = BinaryOperator::Create(Instruction::Mul,op1,
+                            i->getOperand(1),"gen",i);
+                        break;
+                case 3: op = BinaryOperator::Create(Instruction::Shl,
+                            i->getOperand(0),
+                            i->getOperand(1),*var,i);
+                        break;
+              }
+            }
+          }
+          // Binary float
+          if(opcode == Instruction::FAdd || opcode == Instruction::FSub ||
+              opcode == Instruction::FMul || opcode == Instruction::FDiv ||
+              opcode == Instruction::FRem){
+            for(int random = (int)llvm::cryptoutils->get_range(10); random < 10; ++random){
+              switch(llvm::cryptoutils->get_range(3)){ // can be improved
+                case 0: //do nothing
+                  break;
+                case 1: op = BinaryOperator::CreateFNeg(i->getOperand(0),*var,i);
+                        op1 = BinaryOperator::Create(Instruction::FAdd,op,
+                            i->getOperand(1),"gen",i);
+                        break;
+                case 2: op = BinaryOperator::Create(Instruction::FSub,
+                            i->getOperand(0),
+                            i->getOperand(1),*var,i);
+                        op1 = BinaryOperator::Create(Instruction::FMul,op,
+                            i->getOperand(1),"gen",i);
+                        break;
+              }
+            }
+          }
+          if(opcode == Instruction::ICmp){ // Condition (with int)
+            ICmpInst *currentI = (ICmpInst*)(&i);
+            switch(llvm::cryptoutils->get_range(3)){ // must be improved
+              case 0: //do nothing
+                break;
+              case 1: currentI->swapOperands();
+                      break;
+              case 2: // randomly change the predicate
+                      switch(llvm::cryptoutils->get_range(10)){
+                        case 0: currentI->setPredicate(ICmpInst::ICMP_EQ);
+                                break; // equal
+                        case 1: currentI->setPredicate(ICmpInst::ICMP_NE);
+                                break; // not equal
+                        case 2: currentI->setPredicate(ICmpInst::ICMP_UGT);
+                                break; // unsigned greater than
+                        case 3: currentI->setPredicate(ICmpInst::ICMP_UGE);
+                                break; // unsigned greater or equal
+                        case 4: currentI->setPredicate(ICmpInst::ICMP_ULT);
+                                break; // unsigned less than
+                        case 5: currentI->setPredicate(ICmpInst::ICMP_ULE);
+                                break; // unsigned less or equal
+                        case 6: currentI->setPredicate(ICmpInst::ICMP_SGT);
+                                break; // signed greater than
+                        case 7: currentI->setPredicate(ICmpInst::ICMP_SGE);
+                                break; // signed greater or equal
+                        case 8: currentI->setPredicate(ICmpInst::ICMP_SLT);
+                                break; // signed less than
+                        case 9: currentI->setPredicate(ICmpInst::ICMP_SLE);
+                                break; // signed less or equal
+                      }
+                      break;
+            }
+
+          }
+          if(opcode == Instruction::FCmp){ // Conditions (with float)
+            FCmpInst *currentI = (FCmpInst*)(&i);
+            switch(llvm::cryptoutils->get_range(3)){ // must be improved
+              case 0: //do nothing
+                break;
+              case 1: currentI->swapOperands();
+                      break;
+              case 2: // randomly change the predicate
+                      switch(llvm::cryptoutils->get_range(10)){
+                        case 0: currentI->setPredicate(FCmpInst::FCMP_OEQ);
+                                break; // ordered and equal
+                        case 1: currentI->setPredicate(FCmpInst::FCMP_ONE);
+                                break; // ordered and operands are unequal
+                        case 2: currentI->setPredicate(FCmpInst::FCMP_UGT);
+                                break; // unordered or greater than
+                        case 3: currentI->setPredicate(FCmpInst::FCMP_UGE);
+                                break; // unordered, or greater than, or equal
+                        case 4: currentI->setPredicate(FCmpInst::FCMP_ULT);
+                                break; // unordered or less than
+                        case 5: currentI->setPredicate(FCmpInst::FCMP_ULE);
+                                break; // unordered, or less than, or equal
+                        case 6: currentI->setPredicate(FCmpInst::FCMP_OGT);
+                                break; // ordered and greater than
+                        case 7: currentI->setPredicate(FCmpInst::FCMP_OGE);
+                                break; // ordered and greater than or equal
+                        case 8: currentI->setPredicate(FCmpInst::FCMP_OLT);
+                                break; // ordered and less than
+                        case 9: currentI->setPredicate(FCmpInst::FCMP_OLE);
+                                break; // ordered or less than, or equal
+                      }
+                      break;
+            }
+          }
+        }
+      }
+      return alteredBB;
+    } // end of createAlteredBasicBlock()
+
 
 
