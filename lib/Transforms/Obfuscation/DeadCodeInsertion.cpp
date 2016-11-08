@@ -100,75 +100,60 @@ void DeadCodeInsertion::addZero(BinaryOperator *bo){
 
 void DeadCodeInsertion::insertJumps(Function *f){
 	std::vector<BasicBlock *> origBB;
-
+	
 	// Save all basic blocks
 	for (Function::iterator I = f->begin(), IE = f->end(); I != IE; ++I) {
 		origBB.push_back(I);
-	}
-	
+	}	
 	for (std::vector<BasicBlock *>::iterator I = origBB.begin(), IE = origBB.end(); I != IE; ++I) {
 		BasicBlock *bb = *I;
 		//for each block
-		
 		// No need to split a 1 inst bb
 		// Or ones containing a PHI node
 		// Split
 		BasicBlock *toSplit = bb;
 		int toContinue;
-		do {
+		std::vector<BasicBlock*> basicBlockList = vector<BasicBlock*>();
+		std::vector<BasicBlock*> unusedBlockList = vector<BasicBlock*>();
+		do {		
+			int range;			
 			if (toSplit->size() < 2 ) {
 				break;
+			} else if (toSplit->size() > 5) {
+				range = toSplit->size()/2;
+			} else {
+				range = toSplit->size();
 			}
-			BasicBlock::iterator inst = std::next(toSplit->begin(), llvm::cryptoutils->get_range(toSplit->size()/2));
+			BasicBlock::iterator inst = std::next(toSplit->begin(), llvm::cryptoutils->get_range(range));
 			BasicBlock *newBlock = toSplit->splitBasicBlock(inst, "original");
-			//Definitely insert unused block at first try
-			int toInsertUnusedBlock = 1;
-			if (toInsertUnusedBlock) {
-				createAlteredBasicBlock(toSplit, "unused", f);
-				/*BasicBlock *unusedBlock = BasicBlock::Create(bb->getContext(), "unused", f, toSplit);
-				//75% chance of inserting additional unused block
-				toInsertUnusedBlock = llvm::cryptoutils->get_range(4);
-				while (toInsertUnusedBlock) {
-					unusedBlock = unusedBlock->splitBasicBlock(unusedBlock->begin(), "unused");			
-					toInsertUnusedBlock = llvm::cryptoutils->get_range(2);	
-				} */			
-			}
-			//80% chance to continue
+			basicBlockList.push_back(toSplit);
 			toSplit = newBlock;
 			toContinue = llvm::cryptoutils->get_range(5);
 		} while (toContinue);
 
+		basicBlockList.push_back(toSplit);
+		for (std::vector<BasicBlock *>::iterator I = basicBlockList.begin(), IE = basicBlockList.end(); I != IE; ++I) {
+			BasicBlock *bb = *I;			
+			unusedBlockList.push_back(createAlteredBasicBlock(bb, "unused", f));
+		}
+		//TODO: update phi nodes
+		for (std::vector<BasicBlock *>::iterator I = unusedBlockList.begin(), IE = unusedBlockList.end(); I != IE; ++I) {
+			BasicBlock *bb = *I;
+			TerminatorInst* tInst = bb->getTerminator();
+			BasicBlock *successor;
+			for (unsigned int id = 0; id < tInst->getNumSuccessors(); id++) {			
+				unsigned int randomInt = llvm::cryptoutils->get_range(unusedBlockList.size() + basicBlockList.size());
+				if (randomInt < basicBlockList.size()) {
+					successor = basicBlockList[randomInt];
+				} else {
+					successor = unusedBlockList[randomInt-basicBlockList.size()];				
+				}
+				tInst->setSuccessor(id, successor);
+			}
+		}	
+		
 	}
 }
-
-//NOT DONE
-/*
-void fillEmptyBlock(BasicBlock *bb) {
-	BasicBlock *originalBB = bb;
-	IntegerType *int_type = Type::getInt32Ty(originalBB->getContext());
-	for(int random = (int)llvm::cryptoutils->get_range(10); random < 10; ++random){
-	      switch(llvm::cryptoutils->get_range(4)){ // to improve
-		case 0: //do nothing
-		  break;
-		case 1: 
-			ConstantInt *co = (ConstantInt *)ConstantInt::get(int_type, llvm::cryptoutils->get_uint64_t());
-			op = BinaryOperator::CreateNeg(co,*var,originalBB);
-			op1 = BinaryOperator::Create(Instruction::Add,op,
-			    i->getOperand(1),"gen", originalBB);
-			break;
-		case 2: op1 = BinaryOperator::Create(Instruction::Sub,
-			    i->getOperand(0),
-			    i->getOperand(1),*var,originalBB);
-			op = BinaryOperator::Create(Instruction::Mul,op1,
-			    i->getOperand(1),"gen", originalBB);
-			break;
-		case 3: op = BinaryOperator::Create(Instruction::Shl,
-			    i->getOperand(0),
-			    i->getOperand(1),*var,originalBB);
-			break;
-	      }
-	}
-} */
 
 
 //Koped from BogusControlFlow
