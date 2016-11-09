@@ -116,12 +116,16 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 				}
 				unsigned int final_increment = abs(increment);
 				Type *int_type = Type::getInt32Ty(bb->getContext());
-				ConstantInt *c1 = (ConstantInt *)ConstantInt::get(int_type, final_increment);
-				BinaryOperator *new_inst =  BinaryOperator::Create(opcode, latestValue, c1, "correct", inst);
+				//break correction into 2 steps
+				unsigned int step = llvm::cryptoutils->get_range(final_increment);
+				ConstantInt *c1 = (ConstantInt *)ConstantInt::get(int_type, step);
+				ConstantInt *c2 = (ConstantInt *)ConstantInt::get(int_type, final_increment - step);
+				BinaryOperator *new_inst =  BinaryOperator::Create(opcode, latestValue, c1, "correct-", inst);
+				BinaryOperator *new_inst_2 =  BinaryOperator::Create(opcode, new_inst, c2, "correct2-", inst);
 				//replace uses
-				inst->setOperand(i, new_inst);
+				inst->setOperand(i, new_inst_2);
 				//reset modified definitions
-				modifiedDef->modifiedValue = new_inst;
+				modifiedDef->modifiedValue = new_inst_2;
 				modifiedDef->increment = 0;
 									
 				//replace all uses
