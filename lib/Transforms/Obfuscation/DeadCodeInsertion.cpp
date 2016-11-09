@@ -113,6 +113,7 @@ void DeadCodeInsertion::insertJumps(Function *f){
 		// Split
 		BasicBlock *toSplit = bb;
 		int toContinue;
+		BasicBlock::iterator inst;
 		std::vector<BasicBlock*> basicBlockList = vector<BasicBlock*>();
 		std::vector<BasicBlock*> unusedBlockList = vector<BasicBlock*>();
 		do {		
@@ -125,23 +126,29 @@ void DeadCodeInsertion::insertJumps(Function *f){
 				range = toSplit->size();
 			}
 			BasicBlock::iterator inst = std::next(toSplit->begin(), llvm::cryptoutils->get_range(range));
+			while (isa<PHINode>(inst)) {
+				++inst;
+			}
 			BasicBlock *newBlock = toSplit->splitBasicBlock(inst, "original");
 			basicBlockList.push_back(toSplit);
 			toSplit = newBlock;
-			toContinue = llvm::cryptoutils->get_range(5);
+			toContinue = llvm::cryptoutils->get_range(8);
 		} while (toContinue);
-
+/*
 		basicBlockList.push_back(toSplit);
 		for (std::vector<BasicBlock *>::iterator I = basicBlockList.begin(), IE = basicBlockList.end(); I != IE; ++I) {
 			BasicBlock *bb = *I;			
 			unusedBlockList.push_back(createAlteredBasicBlock(bb, "unused", f));
 		}
+
 		//TODO: update phi nodes
 		for (std::vector<BasicBlock *>::iterator I = unusedBlockList.begin(), IE = unusedBlockList.end(); I != IE; ++I) {
 			BasicBlock *bb = *I;
 			TerminatorInst* tInst = bb->getTerminator();
+			//if terminator instruction contains phi node, skip
 			BasicBlock *successor;
-			for (unsigned int id = 0; id < tInst->getNumSuccessors(); id++) {			
+			for (unsigned int id = 0; id < tInst->getNumSuccessors(); id++) {
+				BasicBlock *originalSucc = tInst->getSuccessor(id);		
 				unsigned int randomInt = llvm::cryptoutils->get_range(unusedBlockList.size() + basicBlockList.size());
 				if (randomInt < basicBlockList.size()) {
 					successor = basicBlockList[randomInt];
@@ -150,7 +157,7 @@ void DeadCodeInsertion::insertJumps(Function *f){
 				}
 				tInst->setSuccessor(id, successor);
 			}
-		}	
+		} */
 		
 	}
 }
