@@ -73,6 +73,8 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 	int count = -1;
 	for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
 		count++;
+		Instruction* cloneInst = inst->clone();
+		bool replaced = false;
 		//if terminating instruction
 		if (isa<TerminatorInst>(inst)) {
 			std::vector<Value*>::iterator od = originalDefinitions.begin();
@@ -95,20 +97,35 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 				Type *int_type = Type::getInt32Ty(bb->getContext());
 				ConstantInt *c1 = (ConstantInt *)ConstantInt::get(int_type, final_increment);
 				BinaryOperator *new_inst =  BinaryOperator::Create(opcode, latestValue, c1, "dummy", inst);
-				//replace all uses
-				(*od)->replaceAllUsesWith(new_inst);  	
+
+				//reset modified definitions
+				modifiedDef->modifiedValue = cloneInst;
+				modifiedDef->increment = 0;
+
+				//find if terminating inst uses the variable that was obfuscated
+				unsigned int pos = find(cloneInst->op_begin(),cloneInst->op_end(), *od) - cloneInst->op_begin();
+				//if it does replace it.
+				if (pos < cloneInst->getNumOperands()) {
+					cloneInst->setOperand(pos, new_inst);
+				}
 			}
-			//clean up
-			od = originalDefinitions.begin();
+			//cannot clean up
+			od = std::vector<Value*>();
 			modifiedDefinitions = std::vector<ModifiedDefinition*>();
+			if (replaced) {
+				cloneInst->insertBefore(inst);
+				inst->replaceAllUsesWith(cloneInst);
+				
+			}
 		//continue
 		} else {
 			//check uses
-			for (Use &U : inst->operands()) {
-  				Value *v = U.get();
+			for (unsigned int i = 0; i < cloneInst->getNumOperands(); i++) {
+				Value *v = cloneInst->getOperand(i);
 				//if present in original Defn
 				unsigned int pos = find(originalDefinitions.begin(), originalDefinitions.end(), v) - originalDefinitions.begin();
 				if (originalDefinitions.size() != 0 && pos < originalDefinitions.size()) {
+					replaced = true;
 					//check corresponding modified definition, 
 					ModifiedDefinition* modifiedDef = modifiedDefinitions.at(pos);
 					//add instruction that negates modified definition before the inst
@@ -128,13 +145,24 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 					Type *int_type = Type::getInt32Ty(bb->getContext());
 					ConstantInt *c1 = (ConstantInt *)ConstantInt::get(int_type, final_increment);
 					BinaryOperator *new_inst =  BinaryOperator::Create(opcode, latestValue, c1, "scam", inst);
+					//replace uses
+					cloneInst->setOperand(i, new_inst);
+					//reset modified definitions
+					modifiedDef->modifiedValue = cloneInst;
+					modifiedDef->increment = 0;
+										
 					//replace all uses
-					v->replaceAllUsesWith(new_inst);  
+					//v->replaceAllUsesWith(new_inst);  
 					//remove entry from original and modified definitions
-					originalDefinitions.erase(originalDefinitions.begin() + pos);
-					modifiedDefinitions.erase(modifiedDefinitions.begin() + pos);
+					//originalDefinitions.erase(originalDefinitions.begin() + pos);
+					//modifiedDefinitions.erase(modifiedDefinitions.begin() + pos);
 					errs() << "Hello 3: "<< count << inst->getOpcodeName() << "\n";
 				}
+			}
+			if (replaced) {
+				cloneInst->insertBefore(inst);
+				inst->replaceAllUsesWith(cloneInst);
+				
 			}
 			//choose one of the values in modifiedDefinitions randomly to modify again
 			if (modifiedDefinitions.size() > 0) {
@@ -147,7 +175,6 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 				mdNew->increment += 5;
 				modifiedDefinitions.at(0) = mdNew;
 				errs() << "Hello 2: "<< count << inst->getOpcodeName() << "\n";
-				return;
 			}
 			//if it's a load or a binary operator
 			//store Value into original definitions and modified Definitions so that we can modify next time
