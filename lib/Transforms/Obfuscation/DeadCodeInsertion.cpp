@@ -29,6 +29,10 @@ namespace {
 			opcodeList[0] = Instruction::Add;
 			opcodeList[1] = Instruction::Sub;
 		}
+		//original def
+		vector<Value*> originalDefinitions;
+		//new value
+		vector<ModifiedDefinition*> modifiedDefinitions;
 		bool runOnFunction(Function &F);
 		void insertDeadCode(Function *F);
 		void insertRedundantInstIntoBlock(BasicBlock * bb);
@@ -61,18 +65,16 @@ bool DeadCodeInsertion::runOnFunction(Function &F) {
 void DeadCodeInsertion::insertDeadCode(Function *F) {
 	Function *tmp = F;
 	for (Function::iterator bb = tmp->begin(); bb != tmp->end(); ++bb) {
-		insertRedundantInstIntoBlock(bb);
+		//original def
+		originalDefinitions = std::vector<Value*>();
+		//new value
+		modifiedDefinitions = std::vector<ModifiedDefinition*>();
+		insertRedundantInstIntoBlock(bb);		
 	}	
 }
 
 void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
-	//original def
-	std::vector<Value*> originalDefinitions = std::vector<Value*>();
-	//new value
-	std:vector<ModifiedDefinition*> modifiedDefinitions = std::vector<ModifiedDefinition*>();
-	int count = -1;
 	for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
-		count++;
 		//check uses
 		//choose one of the values in modifiedDefinitions randomly to modify again
 		if (!isa<TerminatorInst>(inst) && modifiedDefinitions.size() > 0) {
@@ -85,7 +87,6 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 			mdNew->modifiedValue = new_inst;
 			mdNew->increment = md->increment + 5;
 			modifiedDefinitions.at(random) = mdNew;
-			errs() << "Hello 2: "<< count << inst->getOpcodeName() << "\n";
 		}
 		for (unsigned int i = 0; i < inst->getNumOperands(); i++) {
 			Value *v = inst->getOperand(i);
@@ -122,7 +123,6 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 				//remove entry from original and modified definitions
 				//originalDefinitions.erase(originalDefinitions.begin() + pos);
 				//modifiedDefinitions.erase(modifiedDefinitions.begin() + pos);
-				errs() << "Hello 3: "<< count << inst->getOpcodeName() << "\n";
 			}
 		}
 		//if it's a load or a binary operator
@@ -132,10 +132,7 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 			ModifiedDefinition* md = new ModifiedDefinition();
 			md->modifiedValue = inst;
 			md->increment = 0;
-			modifiedDefinitions.push_back(md);
-			errs() << "Hello: "<< count << inst->getOpcodeName() << "\n";
-				
-			
+			modifiedDefinitions.push_back(md);		
 		}
 	
 	}
