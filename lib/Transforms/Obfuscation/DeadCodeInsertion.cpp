@@ -29,10 +29,6 @@ namespace {
 			opcodeList[0] = Instruction::Add;
 			opcodeList[1] = Instruction::Sub;
 		}
-		//original def
-		vector<Value*> originalDefinitions;
-		//new value
-		vector<ModifiedDefinition*> modifiedDefinitions;
 		bool runOnFunction(Function &F);
 		void insertDeadCode(Function *F);
 		void insertRedundantInstIntoBlock(BasicBlock * bb);
@@ -65,15 +61,15 @@ bool DeadCodeInsertion::runOnFunction(Function &F) {
 void DeadCodeInsertion::insertDeadCode(Function *F) {
 	Function *tmp = F;
 	for (Function::iterator bb = tmp->begin(); bb != tmp->end(); ++bb) {
-		//original def
-		originalDefinitions = std::vector<Value*>();
-		//new value
-		modifiedDefinitions = std::vector<ModifiedDefinition*>();
 		insertRedundantInstIntoBlock(bb);		
 	}	
 }
 
 void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
+	//original def
+	vector<Value*> originalDefinitions = std::vector<Value*>();
+	//new value
+	vector<ModifiedDefinition*> modifiedDefinitions = std::vector<ModifiedDefinition*>();
 	for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
 		//check uses
 		//choose one of the values in modifiedDefinitions randomly to modify again
@@ -115,7 +111,7 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 				//replace uses
 				inst->setOperand(i, new_inst);
 				//reset modified definitions
-				modifiedDef->modifiedValue = inst;
+				modifiedDef->modifiedValue = new_inst;
 				modifiedDef->increment = 0;
 									
 				//replace all uses
