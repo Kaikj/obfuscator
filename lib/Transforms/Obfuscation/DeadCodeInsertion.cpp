@@ -73,7 +73,10 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 	for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
 		//check uses
 		//choose one of the values in modifiedDefinitions randomly to modify again
-		if (!isa<TerminatorInst>(inst) && modifiedDefinitions.size() > 0) {
+		//do not always randomise for each instruction
+		//1/5 chance of not inserting in dead code
+		int prob_insert_dead_code = llvm::cryptoutils->get_range(5);
+		if (!isa<TerminatorInst>(inst) && modifiedDefinitions.size() > 0 && prob_insert_dead_code) {
 			unsigned int random = llvm::cryptoutils->get_range(modifiedDefinitions.size());
 			ModifiedDefinition *md = modifiedDefinitions.at(random);
 			Type *int_type = Type::getInt32Ty(bb->getContext());
