@@ -9,7 +9,14 @@
 #define DEBUG_TYPE "dci"
 #define NUMBER_DCI 1
 
+
 namespace {
+
+	struct ModifiedDefinition {
+		Value* modifiedValue;
+		int increment;	
+	};
+	
 	struct DeadCodeInsertion : public FunctionPass {
 		static char ID; // Pass identification, replacement for typeid	
 		void (DeadCodeInsertion::*funcDeadCodeInsert[NUMBER_DCI])(BinaryOperator *bo);
@@ -24,6 +31,8 @@ namespace {
 		}
 		bool runOnFunction(Function &F);
 		void insertDeadCode(Function *F);
+		void insertRedundantInstIntoBlock(BasicBlock * bb);
+		void insertZero(Function *F);
 		void insertJumps(Function *f);
 		void addZero(BinaryOperator *bo);
 		void subZero(BinaryOperator *bo);
@@ -41,13 +50,123 @@ Pass *llvm::createDeadCodeInsertion(bool flag) {
 bool DeadCodeInsertion::runOnFunction(Function &F) {
 	Function *tmp = &F;
 	if (toObfuscate(flag, tmp, "dci")) {
-		//insertDeadCode(tmp);
-		insertJumps(tmp);
+		insertDeadCode(tmp);
+		//insertZero(tmp);
+		//insertJumps(tmp);
   	}
 	return false;
 }
 
-void DeadCodeInsertion::insertDeadCode(Function *f) {
+
+void DeadCodeInsertion::insertDeadCode(Function *F) {
+	Function *tmp = F;
+	for (Function::iterator bb = tmp->begin(); bb != tmp->end(); ++bb) {
+		insertRedundantInstIntoBlock(bb);
+	}	
+}
+
+void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
+	//original def
+	std::vector<Value*> originalDefinitions = std::vector<Value*>();
+	//new value
+	std:vector<ModifiedDefinition*> modifiedDefinitions = std::vector<ModifiedDefinition*>();
+	int count = -1;
+	for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
+		count++;
+		//if terminating instruction
+		if (isa<TerminatorInst>(inst)) {
+			std::vector<Value*>::iterator od = originalDefinitions.begin();
+			std::vector<ModifiedDefinition*>::iterator md = modifiedDefinitions.begin();
+			for(; od != originalDefinitions.end() && md!= modifiedDefinitions.end(); ++od, ++md) {
+				//insert instruction to negate modified definition
+				Value* latestValue = (*md)->modifiedValue;
+				int increment = (*md)->increment;
+				Instruction::BinaryOps opcode;
+				if (increment == 0) {
+					continue;				
+				} else if (increment < 0) {
+					//do addition to get it back
+					opcode = BinaryOperator::Add;		
+				} else {
+					//do subtraction to get it back 
+					opcode = BinaryOperator::Sub;				
+				}
+				unsigned int final_increment = abs(increment);
+				Type *int_type = Type::getInt32Ty(bb->getContext());
+				ConstantInt *c1 = (ConstantInt *)ConstantInt::get(int_type, final_increment);
+				BinaryOperator *new_inst =  BinaryOperator::Create(opcode, latestValue, c1, "dummy", inst);
+				//replace all uses
+				(*od)->replaceAllUsesWith(new_inst);  	
+			}
+			//clean up
+			od = originalDefinitions.begin();
+			modifiedDefinitions = std::vector<ModifiedDefinition*>();
+		//continue
+		} else {
+			//check uses
+			for (Use &U : inst->operands()) {
+  				Value *v = U.get();
+				//if present in original Defn
+				unsigned int pos = find(originalDefinitions.begin(), originalDefinitions.end(), v) - originalDefinitions.begin();
+				if (originalDefinitions.size() != 0 && pos < originalDefinitions.size()) {
+					//check corresponding modified definition, 
+					ModifiedDefinition* modifiedDef = modifiedDefinitions.at(pos);
+					//add instruction that negates modified definition before the inst
+					Value* latestValue = modifiedDef->modifiedValue;
+					int increment = modifiedDef->increment;
+					Instruction::BinaryOps opcode;
+					if (increment == 0) {
+						continue;				
+					} else if (increment < 0) {
+						//do addition to get it back
+						opcode = BinaryOperator::Add;		
+					} else {
+						//do subtraction to get it back 
+						opcode = BinaryOperator::Sub;				
+					}
+					unsigned int final_increment = abs(increment);
+					Type *int_type = Type::getInt32Ty(bb->getContext());
+					ConstantInt *c1 = (ConstantInt *)ConstantInt::get(int_type, final_increment);
+					BinaryOperator *new_inst =  BinaryOperator::Create(opcode, latestValue, c1, "scam", inst);
+					//replace all uses
+					v->replaceAllUsesWith(new_inst);  
+					//remove entry from original and modified definitions
+					originalDefinitions.erase(originalDefinitions.begin() + pos);
+					modifiedDefinitions.erase(modifiedDefinitions.begin() + pos);
+					errs() << "Hello 3: "<< count << inst->getOpcodeName() << "\n";
+				}
+			}
+			//choose one of the values in modifiedDefinitions randomly to modify again
+			if (modifiedDefinitions.size() > 0) {
+				ModifiedDefinition *md = modifiedDefinitions.at(0);
+				Type *int_type = Type::getInt32Ty(bb->getContext());
+				ConstantInt *c1 = (ConstantInt *)ConstantInt::get(int_type, 5);
+				BinaryOperator *new_inst =  BinaryOperator::Create(BinaryOperator::Add, md->modifiedValue, c1, "scamscam", inst);				
+				ModifiedDefinition *mdNew = new ModifiedDefinition();
+				mdNew->modifiedValue = new_inst;
+				mdNew->increment += 5;
+				modifiedDefinitions.at(0) = mdNew;
+				errs() << "Hello 2: "<< count << inst->getOpcodeName() << "\n";
+				return;
+			}
+			//if it's a load or a binary operator
+			//store Value into original definitions and modified Definitions so that we can modify next time
+			if (isa<LoadInst>(inst) || isa<BinaryOperator>(inst)) {
+				originalDefinitions.push_back(inst);
+				ModifiedDefinition* md = new ModifiedDefinition();
+				md->modifiedValue = inst;
+				md->increment = 0;
+				modifiedDefinitions.push_back(md);
+				errs() << "Hello: "<< count << inst->getOpcodeName() << "\n";
+				
+			}
+			
+		}
+	
+	}
+}
+
+void DeadCodeInsertion::insertZero(Function *f) {
 	Function *tmp = f;
 	for (Function::iterator bb = tmp->begin(); bb != tmp->end(); ++bb) {
 	      for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
