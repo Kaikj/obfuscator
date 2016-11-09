@@ -78,10 +78,15 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 			ModifiedDefinition *md = modifiedDefinitions.at(random);
 			Type *int_type = Type::getInt32Ty(bb->getContext());
 			ConstantInt *c1 = (ConstantInt *)ConstantInt::get(int_type, 5);
-			BinaryOperator *new_inst =  BinaryOperator::Create(BinaryOperator::Add, md->modifiedValue, c1, "scam", inst);				
+			Instruction::BinaryOps opcode = opcodeList[llvm::cryptoutils->get_range(2)];
+			BinaryOperator *new_inst =  BinaryOperator::Create(opcode, md->modifiedValue, c1, "scam", inst);				
 			ModifiedDefinition *mdNew = new ModifiedDefinition();
 			mdNew->modifiedValue = new_inst;
-			mdNew->increment = md->increment + 5;
+			if (opcode == Instruction::Add) {
+				mdNew->increment = md->increment + 5;
+			} else {
+				mdNew->increment = md->increment - 5;
+			}
 			modifiedDefinitions.at(random) = mdNew;
 		}
 		for (unsigned int i = 0; i < inst->getNumOperands(); i++) {
