@@ -223,9 +223,9 @@ Instruction::BinaryOps DeadCodeInsertion::getRandomOpcode(Type *ty) {
 
 Constant* DeadCodeInsertion::getConstant(Type *ty){
 	if (ty->isFloatingPointTy()) {
-		return (ConstantInt *)ConstantFP::get(ty, (double) llvm::cryptoutils->get_uint64_t());
+		return (ConstantFP *)ConstantFP::get(ty, (double) llvm::cryptoutils->get_uint64_t());
 	} else {
-		return (ConstantFP*) ConstantInt::get(ty, llvm::cryptoutils->get_uint64_t());
+		return (ConstantInt*) ConstantInt::get(ty, llvm::cryptoutils->get_uint64_t());
 	}
 }
 
