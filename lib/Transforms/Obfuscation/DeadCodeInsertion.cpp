@@ -20,7 +20,7 @@ namespace {
 	struct DeadCodeInsertion : public FunctionPass {
 		static char ID; // Pass identification, replacement for typeid	
 		void (DeadCodeInsertion::*funcDeadCodeInsert[NUMBER_DCI])(BinaryOperator *bo);
-		Instruction::BinaryOps opcodeList[2];		
+		Instruction::BinaryOps opcodeList[2];	
 		bool flag;		
 		DeadCodeInsertion() : FunctionPass(ID) {}
 		DeadCodeInsertion(bool flag) : FunctionPass(ID) {
@@ -137,7 +137,7 @@ void DeadCodeInsertion::insertRedundantInstIntoBlock(BasicBlock * bb) {
 		}
 		//if it's a load or a binary operator
 		//store Value into original definitions and modified Definitions so that we can modify next time
-		if (isa<LoadInst>(inst) || isa<BinaryOperator>(inst)) {
+		if ((isa<LoadInst>(inst) || isa<BinaryOperator>(inst)) && inst->getType()->isIntegerTy()) {
 			originalDefinitions.push_back(inst);
 			ModifiedDefinition* md = new ModifiedDefinition();
 			md->modifiedValue = inst;
