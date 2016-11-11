@@ -33,3 +33,4 @@ struct DataFlowTransformation : public FunctionPass {
 }
 
 char DataFlowTransformation::ID = 0;
+static RegisterPass<DataFlowTransformation> X("dataflowtransformation", "Data flow transformation");
