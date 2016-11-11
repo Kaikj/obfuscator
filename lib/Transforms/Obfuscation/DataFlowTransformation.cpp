@@ -16,3 +16,5 @@
 #define DEBUG_TYPE "dataflowtransformation"
 
 using namespace llvm;
+
+STATISTIC(Transformed, "Data flow transformed");
