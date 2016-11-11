@@ -46,3 +46,19 @@ Pass *llvm::createDataFlowTransformation(bool flag) {
 
 // Declaration of global array name
 Twine globalArrayName = "dataFlowTransArray";
+
+bool DataFlowTransformation::doInitialization(Module &M) {
+  // Type definitions
+  ArrayType *IntArrayType = ArrayType::get(IntegerType::get(M.getContext(), 32), 10);
+
+  // Global variable definitions
+  GlobalVariable *globalArray = new GlobalVariable(
+    M,
+    IntArrayType,
+    false,
+    GlobalValue::ExternalLinkage,
+    0,
+    globalArrayName + "_" + M.getModuleIdentifier()
+  );
+}
+}
