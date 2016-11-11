@@ -14,3 +14,5 @@
 #include "llvm/Transforms/Obfuscation/DataFlowTransformation.h"
 
 #define DEBUG_TYPE "dataflowtransformation"
+
+using namespace llvm;
