@@ -152,6 +152,9 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
   return false;
 }
 
+// Implementation of Variable Splitting
+// An example integer variable x is split into two variables a and b such that
+// a = x div 10 and b = x mod 10
 void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// Check if it has been split before
   cout << "no of operands in this inst: " << inst.getNumOperands() << endl;
   for (size_t i = 0; i < inst.getNumOperands(); ++i) {
@@ -162,7 +165,6 @@ void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// 
       cout << "is valid\n";
       if (!variableIsSplit(V)) {   // if valid and not split, split
         cout << "is valid, not split\n";
-        // Split the variable
 //                  Type *ty = bo->getType();
 //                  Type *ty = V->getType();
         auto& ctx = getGlobalContext();
@@ -202,18 +204,10 @@ void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// 
 
         // Register X_A and X_B associated with V
         this->varsRegister[mapKey] = std::make_pair(registerA, registerB);
-        // Split the variable end
       }
     }
   }
 }
-
-// Implementation of Variable Splitting
-// An example integer variable x is split into two variables a and b such that
-// a = x div 10 and b = x mod 10
-//void DataTypeObfuscation::splitVariable(Value* V. Instruction &inst) {
-//
-//}
 
 // Helper functions
 bool DataTypeObfuscation::variableCanSplit(Value *V){
@@ -222,13 +216,6 @@ bool DataTypeObfuscation::variableCanSplit(Value *V){
   cout << V->getType()->isFloatTy() << endl;
   cout << V->getType()->isFloatingPointTy() << endl;
   return V->getType()->isIntegerTy();
-//  if (Constant *a = dyn_cast<Constant>(V)) {
-//    cout << "true, it's an int\n";
-//    return a->getType()->isIntegerTy();
-//  } else {
-//    cout << "false\n";
-//    return false;
-//  }
 }
 
 bool DataTypeObfuscation::variableIsSplit(Value *V){
