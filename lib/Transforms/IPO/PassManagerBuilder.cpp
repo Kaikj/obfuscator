@@ -33,6 +33,7 @@
 #include "llvm/Transforms/Obfuscation/Flattening.h"
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/Substitution.h"
+#include "llvm/Transforms/Obfuscation/DataFlowTransformation.h"
 #include "llvm/CryptoUtils.h"
 
 using namespace llvm;
