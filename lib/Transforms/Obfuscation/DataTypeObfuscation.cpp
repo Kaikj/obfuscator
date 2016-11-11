@@ -51,6 +51,8 @@ namespace {
 //void splitVariable(Value* V. Instruction &inst);
     bool variableCanSplit(Value* V);
     bool variableIsSplit(Value* V);
+
+    void splitVariable(bool isVolatile, Instruction &inst);
   };
 }
 
@@ -80,60 +82,7 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
         switch (inst.getOpcode()) {
           case BinaryOperator::Add: { // can only split on add
             BinaryOperator *bo = cast<BinaryOperator>(&inst);
-            // Check if it has been split before
-            cout << "no of operands in this inst: " << inst.getNumOperands() << endl;
-            for (size_t i = 0; i < inst.getNumOperands(); ++i) {
-              cout << "getting operand\n";
-              Value *V = inst.getOperand(i);
-              cout << "got operand: " << endl;
-              if (variableCanSplit(V)) { // if valid operand, check if it's integer
-                cout << "is valid\n";
-                if (!variableIsSplit(V)) {   // if valid and not split, split
-                  cout << "is valid, not split\n";
-                  // Split the variable
-//                  Type *ty = bo->getType();
-//                  Type *ty = V->getType();
-                  auto& ctx = getGlobalContext();
-                  Type *ty = Type::getInt32Ty(ctx);
-//                  Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
-                  ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
-                  cout << "got ten " << endl;
-
-                  IRBuilder<> Builder(&inst);
-
-                  // Allocate registers for xa and xb
-                  Value* registerA = Builder.CreateAlloca(ty, 0, "x_a");
-                  Value* registerB = Builder.CreateAlloca(ty, 0, "x_b");
-                  cout << "allocated registers for xa xb " << endl;
-
-                  // Store V in those registers
-                  Builder.CreateStore(V, registerA, isVolatile);
-                  Builder.CreateStore(V, registerB, isVolatile);
-
-                  Value* loadA = Builder.CreateLoad(registerA, isVolatile);
-                  Value* loadB = Builder.CreateLoad(registerB, isVolatile);
-                  cout << "create load for xa xb " << endl;
-                  cout << "load xa: "<< loadA->getValueName() << endl;
-                  cout << "load xb: "<< loadB->getValueName() << endl;
-
-                  Value* xaModTen = Builder.CreateURem(loadA, ten); //X_A mod 10
-                  Value* xbDivTen = Builder.CreateUDiv(loadB, ten); //X_B div 10
-
-                  cout << "xa % 10 "<< xaModTen->getValueName() << endl;
-                  cout << "xb / 10 "<< xbDivTen->getValueName() << endl;
-                  Builder.CreateStore(xaModTen, registerA, isVolatile);
-                  Builder.CreateStore(xbDivTen, registerB, isVolatile);
-
-                  cout << "create store for xa xb " << endl;
-
-                  Value* mapKey = V;
-
-                  // Register X_A and X_B associated with V
-                  varsRegister[mapKey] = std::make_pair(registerA,registerB);
-                  // Split the variable end
-                }
-              }
-            }
+            splitVariable(isVolatile, inst);
 
             IRBuilder<> Builder(&inst);
 
@@ -201,6 +150,62 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
     }
   }
   return false;
+}
+
+void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// Check if it has been split before
+  cout << "no of operands in this inst: " << inst.getNumOperands() << endl;
+  for (size_t i = 0; i < inst.getNumOperands(); ++i) {
+    cout << "getting operand\n";
+    Value *V = inst.getOperand(i);
+    cout << "got operand: " << endl;
+    if (variableCanSplit(V)) { // if valid operand, check if it's integer
+      cout << "is valid\n";
+      if (!variableIsSplit(V)) {   // if valid and not split, split
+        cout << "is valid, not split\n";
+        // Split the variable
+//                  Type *ty = bo->getType();
+//                  Type *ty = V->getType();
+        auto& ctx = getGlobalContext();
+        Type *ty = Type::getInt32Ty(ctx);
+//                  Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
+        ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
+        cout << "got ten " << endl;
+
+        IRBuilder<> Builder(&inst);
+
+        // Allocate registers for xa and xb
+        Value* registerA = Builder.CreateAlloca(ty, 0, "x_a");
+        Value* registerB = Builder.CreateAlloca(ty, 0, "x_b");
+        cout << "allocated registers for xa xb " << endl;
+
+        // Store V in those registers
+        Builder.CreateStore(V, registerA, isVolatile);
+        Builder.CreateStore(V, registerB, isVolatile);
+
+        Value* loadA = Builder.CreateLoad(registerA, isVolatile);
+        Value* loadB = Builder.CreateLoad(registerB, isVolatile);
+        cout << "create load for xa xb " << endl;
+        cout << "load xa: "<< loadA->getValueName() << endl;
+        cout << "load xb: "<< loadB->getValueName() << endl;
+
+        Value* xaModTen = Builder.CreateURem(loadA, ten); //X_A mod 10
+        Value* xbDivTen = Builder.CreateUDiv(loadB, ten); //X_B div 10
+
+        cout << "xa % 10 "<< xaModTen->getValueName() << endl;
+        cout << "xb / 10 "<< xbDivTen->getValueName() << endl;
+        Builder.CreateStore(xaModTen, registerA, isVolatile);
+        Builder.CreateStore(xbDivTen, registerB, isVolatile);
+
+        cout << "create store for xa xb " << endl;
+
+        Value* mapKey = V;
+
+        // Register X_A and X_B associated with V
+        this->varsRegister[mapKey] = std::make_pair(registerA, registerB);
+        // Split the variable end
+      }
+    }
+  }
 }
 
 // Implementation of Variable Splitting
