@@ -43,3 +43,6 @@ Pass *llvm::createDataFlowTransformation() {
 Pass *llvm::createDataFlowTransformation(bool flag) {
   return new DataFlowTransformation(flag);
 }
+
+// Declaration of global array name
+Twine globalArrayName = "dataFlowTransArray";
