@@ -67,4 +67,7 @@ bool DataFlowTransformation::doInitialization(Module &M) {
 }
 
 bool DataFlowTransformation::runOnFunction(Function &F) {
+  if (!toObfuscate(flag, &F, "dft")) {
+    return false;
+  }
 }
