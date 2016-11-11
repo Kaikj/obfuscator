@@ -101,6 +101,9 @@ static cl::opt<std::string> AesSeed("aesSeed", cl::init(""),
 static cl::opt<bool> Split("spli", cl::init(false),
                            cl::desc("Enable basic block splitting"));
 
+static cl::opt<bool> DataFlowTransformation("dft", cl::init(false),
+                                            cl::desc("Enable data flow transformations"));
+
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
     SizeLevel = 0;
