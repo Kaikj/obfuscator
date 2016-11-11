@@ -18,3 +18,16 @@
 using namespace llvm;
 
 STATISTIC(Transformed, "Data flow transformed");
+
+namespace {
+struct DataFlowTransformation : public FunctionPass {
+  static char ID;
+  bool flag;
+
+  DataFlowTransformation() : FunctionPass(ID) {}
+  DataFlowTransformation(bool flag) : FunctionPass(ID) { this->flag = flag; }
+
+  bool doInitialization(Module &M);
+  bool runOnFunction(Function &F);
+};
+}
