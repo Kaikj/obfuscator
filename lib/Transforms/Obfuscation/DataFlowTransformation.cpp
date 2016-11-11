@@ -31,3 +31,5 @@ struct DataFlowTransformation : public FunctionPass {
   bool runOnFunction(Function &F);
 };
 }
+
+char DataFlowTransformation::ID = 0;
