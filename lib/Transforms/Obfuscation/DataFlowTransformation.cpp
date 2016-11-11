@@ -65,4 +65,6 @@ bool DataFlowTransformation::doInitialization(Module &M) {
   ConstantInt *zero = ConstantInt::get(M.getContext(), APInt(32, 0));
   globalArray->setInitializer(zero);
 }
+
+bool DataFlowTransformation::runOnFunction(Function &F) {
 }
