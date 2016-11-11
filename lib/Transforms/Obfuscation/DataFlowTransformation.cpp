@@ -34,3 +34,12 @@ struct DataFlowTransformation : public FunctionPass {
 
 char DataFlowTransformation::ID = 0;
 static RegisterPass<DataFlowTransformation> X("dataflowtransformation", "Data flow transformation");
+
+// Public exposed function
+Pass *llvm::createDataFlowTransformation() {
+  return new DataFlowTransformation();
+}
+
+Pass *llvm::createDataFlowTransformation(bool flag) {
+  return new DataFlowTransformation(flag);
+}
