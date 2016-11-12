@@ -80,7 +80,7 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
 
       if (inst.isBinaryOp()) {
         switch (inst.getOpcode()) {
-          case BinaryOperator::Add: { // can only split on add
+          case BinaryOperator::Add: {
             BinaryOperator *bo = cast<BinaryOperator>(&inst);
             splitVariable(isVolatile, inst);
 
@@ -100,6 +100,14 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
               break;
             }
 
+            /*
+               From https://www.cs.ox.ac.uk/files/2936/RR-10-02.pdf:
+               Given variable Z = X + Y, we split A and B as follows:
+               X_A = X % 10, X_B = X / 10, Y_A = Y % 10, Y_B = Y / 10
+               We then form Z as follows:
+               Z_A = (X_A + Y_A) % 10, Z_B = { 10 * (X_B + Y_B) + (X_A + Y_A) } / 10
+               X = 10 * Z_B + Z_A
+            */
             typeMap::iterator it = varsRegister.find(operand0);
             Value *xa = Builder.CreateLoad(it->second.first, isVolatile);
             Value *xb = Builder.CreateLoad(it->second.second, isVolatile);
@@ -111,9 +119,9 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
             Value* xaYa = Builder.CreateAdd(xa, ya); // za = xa + ya
             Value* xbYb = Builder.CreateAdd(xb, yb); // zb = xb + yb
             Value* za = Builder.CreateURem(xaYa, ten, "z_a");
-            Value* tenXbYb = Builder.CreateMul(xbYb, ten);//10*(X_B+Y_B)
-            Value* tenXbYbPlusXaYa = Builder.CreateAdd(tenXbYb, xaYa);//10*(X_B+Y_B)+[X_A+Y_A]
-            Value* zb = Builder.CreateUDiv(tenXbYbPlusXaYa, ten, "z_b"); //{ 10*(X_B+Y_B)+[X_A+Y_A] } div 10 => Z_B
+            Value* tenXbYb = Builder.CreateMul(xbYb, ten); // 10 * (xb + yb)
+            Value* tenXbYbPlusXaYa = Builder.CreateAdd(tenXbYb, xaYa); // 10 * (xb + yb) + (xa + ya)
+            Value* zb = Builder.CreateUDiv(tenXbYbPlusXaYa, ten, "z_b"); // {10 * (xb + yb) + (xa + ya)} / 10 => Z_B
 
             Value* registerZa = Builder.CreateAlloca(ty, nullptr, "z_a");
             Value* registerZb = Builder.CreateAlloca(ty, nullptr, "z_b");
@@ -140,6 +148,79 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
             break;
           }
           case BinaryOperator::Sub: {
+            BinaryOperator *bo = cast<BinaryOperator>(&inst);
+            splitVariable(isVolatile, inst);
+
+            IRBuilder<> Builder(&inst);
+
+            auto& ctx = getGlobalContext();
+            Type *ty = Type::getInt32Ty(ctx);
+//            Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
+            ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
+
+            Value *operand0 = bo->getOperand(0);
+            Value *operand1 = bo->getOperand(1);
+
+            if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
+              cout << "Error : operands aren't split !\n";
+              break;
+            }
+
+            /*
+               Given variable Z = X - Y, we split A and B as follows:
+               X_A = X % 10, X_B = X / 10, Y_A = Y % 10, Y_B = Y / 10
+               We then form Z as follows:
+               Z_A = (X_A - Y_A) % 10, Z_B = { 10 * (X_B - Y_B) + (X_A - Y_A) } / 10
+               X = 10 * Z_B + Z_A
+
+               e.g. X = 25, Y = 15
+               xa = 5, xb = 2, ya = 5, yb = 1
+               za = 0 mod 10 = 0, zb = 10 * 1 + 0 / 10 = 1
+               x = 10 * 1 + 0 = 10, correct
+
+               e.g. X = 15, Y = 25
+               xa = 5, xb = 1, ya = 5, yb = 2
+               za = 0 mod 10 = 0, zb = 10 * -1 + 0 / 10 = -1
+               x = 10 * -1 + 0 = -10
+
+            */
+            typeMap::iterator it = varsRegister.find(operand0);
+            Value *xa = Builder.CreateLoad(it->second.first, isVolatile);
+            Value *xb = Builder.CreateLoad(it->second.second, isVolatile);
+
+            it = varsRegister.find(operand1);
+            Value *ya = Builder.CreateLoad(it->second.first, isVolatile);
+            Value *yb = Builder.CreateLoad(it->second.second, isVolatile);
+
+            Value* xaYa = Builder.CreateSub(xa, ya); // za = xa - ya
+            Value* xbYb = Builder.CreateSub(xb, yb); // zb = xb - yb
+            Value* za = Builder.CreateURem(xaYa, ten, "z_a");
+            Value* tenXbYb = Builder.CreateMul(xbYb, ten); // 10 * (xb - yb)
+            Value* tenXbYbPlusXaYa = Builder.CreateAdd(tenXbYb, xaYa); // 10 * (xb - yb) + (xa - ya)
+            Value* zb = Builder.CreateUDiv(tenXbYbPlusXaYa, ten, "z_b"); // {10 * (xb - yb) + (xa - ya)} / 10 => Z_B
+
+            Value* registerZa = Builder.CreateAlloca(ty, nullptr, "z_a");
+            Value* registerZb = Builder.CreateAlloca(ty, nullptr, "z_b");
+
+            Builder.CreateStore(za, registerZa, isVolatile);
+            Builder.CreateStore(zb, registerZb, isVolatile);
+
+            Value* loadResultA = Builder.CreateLoad(registerZa, isVolatile);
+            Value* loadResultB = Builder.CreateLoad(registerZb, isVolatile);
+
+            Value* registerAns = Builder.CreateAlloca(ty, nullptr, "ans");
+            Value* tenZb = Builder.CreateMul(loadResultB, ten);
+            Value* answer = Builder.CreateAdd(tenZb, za);
+            Builder.CreateStore(answer, registerAns, isVolatile);
+            Value* loadAnswer = Builder.CreateLoad(registerAns, isVolatile);
+
+            // the key to access to the variables Z_A and Z_B from the ValueMap is Z_A.
+            varsRegister[loadResultA] = std::make_pair(registerZa, registerZb);
+
+            // We replace all uses of the add result with the register that contains Z_A
+            inst.replaceAllUsesWith(loadAnswer);
+
+            ++VarSplitted;
             break;
           }
           default: {
