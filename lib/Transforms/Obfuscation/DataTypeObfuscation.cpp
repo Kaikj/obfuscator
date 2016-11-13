@@ -106,7 +106,7 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
                X_A = X % 10, X_B = X / 10, Y_A = Y % 10, Y_B = Y / 10
                We then form Z as follows:
                Z_A = (X_A + Y_A) % 10, Z_B = { 10 * (X_B + Y_B) + (X_A + Y_A) } / 10
-               X = 10 * Z_B + Z_A
+               Z = 10 * Z_B + Z_A
             */
             typeMap::iterator it = varsRegister.find(operand0);
             Value *xa = Builder.CreateLoad(it->second.first, isVolatile);
@@ -171,7 +171,7 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
                X_A = X % 10, X_B = X / 10, Y_A = Y % 10, Y_B = Y / 10
                We then form Z as follows:
                Z_A = (X_A - Y_A) % 10, Z_B = { 10 * (X_B - Y_B) + (X_A - Y_A) } / 10
-               X = 10 * Z_B + Z_A
+               Z = 10 * Z_B + Z_A
 
                e.g. X = 25, Y = 15
                xa = 5, xb = 2, ya = 5, yb = 1
@@ -240,7 +240,7 @@ void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// 
   cout << "no of operands in this inst: " << inst.getNumOperands() << endl;
   for (size_t i = 0; i < inst.getNumOperands(); ++i) {
     cout << "getting operand\n";
-    Value *V = inst.getOperand(i);
+    Value* V = inst.getOperand(i);
     cout << "got operand: " << endl;
     if (variableCanSplit(V)) { // if valid operand, check if it's integer
       cout << "is valid\n";
