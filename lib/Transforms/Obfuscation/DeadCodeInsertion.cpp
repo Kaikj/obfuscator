@@ -19,14 +19,12 @@ namespace {
 	
 	struct DeadCodeInsertion : public FunctionPass {
 		static char ID; // Pass identification, replacement for typeid	
-		void (DeadCodeInsertion::*funcDeadCodeInsert[NUMBER_DCI])(BinaryOperator *bo);
 		Instruction::BinaryOps opcodeList[5];
 		Instruction::BinaryOps fopcodeList[5];
 		bool flag;		
 		DeadCodeInsertion() : FunctionPass(ID) {}
 		DeadCodeInsertion(bool flag) : FunctionPass(ID) {
 			this->flag = flag;
-			funcDeadCodeInsert[0] = &DeadCodeInsertion::addUnusedInstruction;
 			opcodeList[0] = Instruction::Add;
 			opcodeList[1] = Instruction::Sub;
 			opcodeList[2] = Instruction::Mul;	
@@ -38,11 +36,10 @@ namespace {
 		void insertUsedDeadCode(Function *F);
 		void insertUsedDeadCodeIntoBlock(BasicBlock * bb);
 		void insertUnusedDeadCode(Function *F);
-		void addUnusedInstruction(BinaryOperator *bo);
+		void addUnusedIntInstruction(BinaryOperator *bo);
+		void addUnusedFloatInstruction(BinaryOperator *bo);
 		BasicBlock* createAlteredBasicBlock(BasicBlock*, const Twine&, Function*);
-		Constant* getRandomConstant(Type *ty);
 		Constant* getConstant(Type *ty, int number);
-		Instruction::BinaryOps getRandomOpcode(Type *ty);
 		Instruction::BinaryOps getRandomAddOrSubOpcode(Type *ty);
 		bool isAdditionOpcode(Instruction::BinaryOps op);
 		Instruction::BinaryOps getAdditionOpcode(Type *ty);
@@ -51,7 +48,7 @@ namespace {
 }
 
 char DeadCodeInsertion::ID = 0;
-static RegisterPass<DeadCodeInsertion> X("dci", "Dead Code Insertion Pass");
+static RegisterPass<DeadCodeInsertion> X("deadcodeinsertion", "Dead Code Insertion Pass");
 
 Pass *llvm::createDeadCodeInsertion(bool flag) {
 	return new DeadCodeInsertion(flag);
@@ -167,17 +164,12 @@ void DeadCodeInsertion::insertUnusedDeadCode(Function *f) {
 				case BinaryOperator::Add:
 				case BinaryOperator::Sub:
 				case BinaryOperator::Mul:
-				case BinaryOperator::SDiv:
-				case BinaryOperator::SRem:	
+					addUnusedIntInstruction(cast<BinaryOperator>(inst));
+					break;	
 				case BinaryOperator::FAdd:
 				case BinaryOperator::FSub:
 				case BinaryOperator::FMul:
-				case BinaryOperator::FDiv:
-				case BinaryOperator::FRem:
-					// case BinaryOperator::FAdd:
-					// Substitute with random add operation
-					(this->*funcDeadCodeInsert[llvm::cryptoutils->get_range
-						(NUMBER_DCI)])(cast<BinaryOperator>(inst));
+					addUnusedFloatInstruction(cast<BinaryOperator>(inst));
 					break;
 				default:
 					break;
@@ -187,18 +179,18 @@ void DeadCodeInsertion::insertUnusedDeadCode(Function *f) {
 	}                    // End for Function
 }
 
-void DeadCodeInsertion::addUnusedInstruction(BinaryOperator *bo){
+void DeadCodeInsertion::addUnusedIntInstruction(BinaryOperator *bo){
 	BinaryOperator *op = NULL;
 	Type *ty = bo->getType();
-	Instruction::BinaryOps opcode = getRandomOpcode(ty);
-	Constant *c1 = getRandomConstant(ty);
+	Instruction::BinaryOps opcode = opcodeList[llvm::cryptoutils->get_range(3)];
+	Constant *c1 = (ConstantInt*) ConstantInt::get(ty, llvm::cryptoutils->get_uint64_t());
 	int index = llvm::cryptoutils->get_range(2);
 	op = BinaryOperator::Create(opcode, bo->getOperand(index), c1, "unusedOne", bo);
 
 	//to continue
 	bool toContinue = llvm::cryptoutils->get_range(2);
 	while (toContinue) {
-		opcode = getRandomOpcode(ty);
+		opcode = opcodeList[llvm::cryptoutils->get_range(3)];
 		Value *operands[3];	
 		operands[0] = bo->getOperand(0);
 		operands[1] = bo->getOperand(1);
@@ -215,12 +207,32 @@ void DeadCodeInsertion::addUnusedInstruction(BinaryOperator *bo){
 	//bo->replaceAllUsesWith(op);
 }
 
-Instruction::BinaryOps DeadCodeInsertion::getRandomOpcode(Type *ty) {
-	if (ty->isFloatingPointTy()) {
-		return fopcodeList[llvm::cryptoutils->get_range(3)];
-	} else {
-		return opcodeList[llvm::cryptoutils->get_range(3)];	
+void DeadCodeInsertion::addUnusedFloatInstruction(BinaryOperator *bo){
+	BinaryOperator *op = NULL;
+	Type *ty = bo->getType();
+	Instruction::BinaryOps opcode = fopcodeList[llvm::cryptoutils->get_range(3)];
+	Constant *c1 = (ConstantFP*) ConstantFP::get(ty, (double) llvm::cryptoutils->get_uint64_t());
+	int index = llvm::cryptoutils->get_range(2);
+	op = BinaryOperator::Create(opcode, bo->getOperand(index), c1, "unusedOne", bo);
+
+	//to continue
+	bool toContinue = llvm::cryptoutils->get_range(2);
+	while (toContinue) {
+		opcode = fopcodeList[llvm::cryptoutils->get_range(3)];
+		Value *operands[3];	
+		operands[0] = bo->getOperand(0);
+		operands[1] = bo->getOperand(1);
+		operands[2] = op;
+		Value *LHS_operand = operands[llvm::cryptoutils->get_range(3)];
+		Value *RHS_operand = operands[llvm::cryptoutils->get_range(3)];
+		op = BinaryOperator::Create(opcode, LHS_operand, RHS_operand, "unusedTwo", bo);
+		toContinue = llvm::cryptoutils->get_range(2);
+	
 	}
+	// Check signed wrap
+//	op->setHasNoSignedWrap(bo->hasNoSignedWrap());
+//	op->setHasNoUnsignedWrap(bo->hasNoUnsignedWrap());
+	//bo->replaceAllUsesWith(op);
 }
 
 Instruction::BinaryOps DeadCodeInsertion::getRandomAddOrSubOpcode(Type *ty) {
@@ -249,14 +261,6 @@ Instruction::BinaryOps DeadCodeInsertion::getSubtractionOpcode(Type *ty) {
 
 bool DeadCodeInsertion::isAdditionOpcode(Instruction::BinaryOps op) {
 	return op == Instruction::Add || op == Instruction::FAdd;
-}
-
-Constant* DeadCodeInsertion::getRandomConstant(Type *ty){
-	if (ty->isFloatingPointTy()) {
-		return (ConstantFP *)ConstantFP::get(ty, (double) llvm::cryptoutils->get_uint64_t());
-	} else {
-		return (ConstantInt*) ConstantInt::get(ty, llvm::cryptoutils->get_uint64_t());
-	}
 }
 
 Constant* DeadCodeInsertion::getConstant(Type *ty, int number){
