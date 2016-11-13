@@ -376,13 +376,6 @@ void Substitution::subRand2(BinaryOperator *bo) {
     op =
         BinaryOperator::Create(Instruction::Sub, op, bo->getOperand(1), "", bo);
     op = BinaryOperator::Create(Instruction::Add, op, co, "", bo);
-    //extra commands
-    ConstantInt *c1 = (ConstantInt *)ConstantInt::get(ty, 0);
-    op = BinaryOperator::Create(Instruction::Add, op, c1, "", bo);
-    IntegerType *int_type = Type::getInt64Ty(llvm::getGlobalContext());
-    Value *num = ConstantInt::get(int_type, 2);
-    Value *alloc = new AllocaInst(int_type, "all", bo); 
-    StoreInst *ptr = new StoreInst(num, alloc, bo);
 
     // Check signed wrap
     op->setHasNoSignedWrap(bo->hasNoSignedWrap());
