@@ -9,7 +9,6 @@
 #define DEBUG_TYPE "dci"
 #define NUMBER_DCI 1
 
-
 namespace {
 
 	struct ModifiedDefinition {
@@ -55,7 +54,7 @@ namespace {
 }
 
 char DeadCodeInsertion::ID = 0;
-static RegisterPass<DeadCodeInsertion> X("dci", "Dead Code Insertion Pass");
+static RegisterPass<DeadCodeInsertion> X("DeadCodeInsertion", "Dead Code Insertion Pass");
 
 Pass *llvm::createDeadCodeInsertion(bool flag) {
 	return new DeadCodeInsertion(flag);
@@ -79,11 +78,11 @@ void DeadCodeInsertion::insertUsedDeadCode(Function *F) {
 }
 
 void DeadCodeInsertion::insertUsedDeadCodeIntoBlock(BasicBlock * bb) {
-	//original def
-	vector<Value*> originalDefinitions = std::vector<Value*>();
-	//new value
-	vector<ModifiedDefinition*> modifiedDefinitions = std::vector<ModifiedDefinition*>();
 	for (BasicBlock::iterator inst = bb->begin(); inst != bb->end(); ++inst) {
+		//original def
+		vector<Value*> originalDefinitions = std::vector<Value*>();
+		//new value
+		vector<ModifiedDefinition*> modifiedDefinitions = std::vector<ModifiedDefinition*>();
 		//check uses
 		//choose one of the values in modifiedDefinitions randomly to modify again
 		//do not always randomise for each instruction
