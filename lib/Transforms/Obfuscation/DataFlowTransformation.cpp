@@ -98,7 +98,7 @@ bool DataFlowTransformation::runOnModule(Module &M) {
 
     BasicBlock *newBlock = BasicBlock::Create(F->getContext(), "one", F, firstBlock);
     for (std::map<APSInt, ConstantInt *>::iterator it = intToIndex.begin(), ite = intToIndex.end(); it != ite; ++it) {
-      GetElementPtrInst *gepInst = GetElementPtrInst::CreateInBounds(newGlobalArray, ArrayRef<Value *>(it->second), "pointer" + it->second->getValue().toString(7, false), newBlock);
+      GetElementPtrInst *gepInst = GetElementPtrInst::CreateInBounds(newGlobalArray, ArrayRef<Value *>(std::vector<Value *> {ConstantInt::get(M.getContext(), APInt(32, 0)), it->second}), "pointer" + it->second->getValue().toString(7, false), newBlock);
       new StoreInst(ConstantInt::get(F->getContext(), it->first), gepInst, newBlock);
     }
   }
@@ -134,7 +134,7 @@ void DataFlowTransformation::runOnFunction(Function &F) {
             currentIndex++;
           }
 
-          GetElementPtrInst *gepInst = GetElementPtrInst::Create(globalArray, ArrayRef<Value *>(it->second), "array" + it->second->getValue().toString(10, false), inst);
+          GetElementPtrInst *gepInst = GetElementPtrInst::Create(globalArray, ArrayRef<Value *>(std::vector<Value *> { ConstantInt::get(F.getContext(), APInt(32, 0)), it->second }), "array" + it->second->getValue().toString(10, false), inst);
           *operand = gepInst;
 
           break;
