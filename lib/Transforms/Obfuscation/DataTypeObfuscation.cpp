@@ -82,20 +82,21 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
       Instruction &inst = *instIter;
 
       if (instValidForSplit(inst)) {
-        BinaryOperator *bo = cast<BinaryOperator>(&inst);
-        splitVariable(isVolatile, inst);
-        IRBuilder<> Builder(&inst);
-        Type *ty = bo->getType();
-
-        Value *operand0 = parseOperand(bo->getOperand(0));
-        Value *operand1 = parseOperand(bo->getOperand(1));
-
-        if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
-          break;
-        }
-
         switch (inst.getOpcode()) {
           case BinaryOperator::Add: {
+            BinaryOperator *bo = cast<BinaryOperator>(&inst);
+            splitVariable(isVolatile, inst);
+
+            IRBuilder<> Builder(&inst);
+
+            Type *ty = bo->getType();
+
+            Value *operand0 = parseOperand(bo->getOperand(0));
+            Value *operand1 = parseOperand(bo->getOperand(1));
+
+            if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
+              break;
+            }
 //            auto& ctx = getGlobalContext();
 //            Type *ty = Type::getInt32Ty(ctx);
 //            Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
@@ -156,6 +157,19 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
             break;
           }
           case BinaryOperator::Sub: {
+//            break;
+            BinaryOperator *bo = cast<BinaryOperator>(&inst);
+            splitVariable(isVolatile, inst);
+
+            IRBuilder<> Builder(&inst);
+
+            Type *ty = bo->getType();
+            Value *operand0 = parseOperand(bo->getOperand(0));
+            Value *operand1 = parseOperand(bo->getOperand(1));
+
+            if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
+              break;
+            }
 //            auto& ctx = getGlobalContext();
 //            Type *ty = Type::getInt32Ty(ctx);
 //            Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
@@ -308,7 +322,7 @@ void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// 
 }
 
 // Implementation of Variable Merging
-// Two variables a and b such that a = x div 10 and b = x mod 10 will be merged
+// Two variables xa and xb such that xa = x div 10 and xb = x mod 10 will be merged
 // x = 10 * xb + xa
 void DataTypeObfuscation::mergeVariable(bool isVolatile, Value* V, Instruction &inst) {
   typeMap::iterator it;
