@@ -71,7 +71,6 @@ bool DataFlowTransformation::runOnModule(Module &M) {
 
   std::vector<Constant *> v(intToIndex.size(), 0);
   for (std::map<APSInt, ConstantInt *>::iterator it = intToIndex.begin(), ite = intToIndex.end(); it != ite; ++it) {
-    outs() << v[*(it->second->getValue().getRawData())] << "\n";
     v[*(it->second->getValue().getRawData())] = ConstantInt::get(M.getContext(), it->first);
   }
   // Type definitions
