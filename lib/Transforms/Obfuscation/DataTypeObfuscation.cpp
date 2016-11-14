@@ -74,6 +74,7 @@ bool DataTypeObfuscation::runOnFunction(Function &F) {
 bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
   Function *tmp = f;
   for (Function::iterator bb = tmp->begin(); bb != tmp->end(); ++bb) {
+    varsRegister.clear();
     for (BasicBlock::iterator instIter = bb->begin(); instIter!= bb->end(); ++instIter) {
       bool isVolatile = false;
       Instruction &inst = *instIter;
@@ -86,9 +87,9 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
 
             IRBuilder<> Builder(&inst);
 
-//            Type *ty = bo->getType();
-            auto& ctx = getGlobalContext();
-            Type *ty = Type::getInt32Ty(ctx);
+            Type *ty = bo->getType();
+//            auto& ctx = getGlobalContext();
+//            Type *ty = Type::getInt32Ty(ctx);
 //            Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
             ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
 
@@ -96,7 +97,7 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
             Value *operand1 = bo->getOperand(1);
 
             if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
-              cout << "Error : operands aren't split !\n";
+              // cout << "Error : operands aren't split !\n";
               break;
             }
 
@@ -118,10 +119,10 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
 
             Value* xaYa = Builder.CreateAdd(xa, ya); // za = xa + ya
             Value* xbYb = Builder.CreateAdd(xb, yb); // zb = xb + yb
-            Value* za = Builder.CreateSRem(xaYa, ten, "z_a");
+            Value* za = Builder.CreateURem(xaYa, ten, "z_a");
             Value* tenXbYb = Builder.CreateMul(xbYb, ten); // 10 * (xb + yb)
             Value* tenXbYbPlusXaYa = Builder.CreateAdd(tenXbYb, xaYa); // 10 * (xb + yb) + (xa + ya)
-            Value* zb = Builder.CreateSDiv(tenXbYbPlusXaYa, ten, "z_b"); // {10 * (xb + yb) + (xa + ya)} / 10 => Z_B
+            Value* zb = Builder.CreateUDiv(tenXbYbPlusXaYa, ten, "z_b"); // {10 * (xb + yb) + (xa + ya)} / 10 => Z_B
 
             Value* registerZa = Builder.CreateAlloca(ty, nullptr, "z_a");
             Value* registerZb = Builder.CreateAlloca(ty, nullptr, "z_b");
@@ -148,13 +149,15 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
             break;
           }
           case BinaryOperator::Sub: {
+//            break;
             BinaryOperator *bo = cast<BinaryOperator>(&inst);
             splitVariable(isVolatile, inst);
 
             IRBuilder<> Builder(&inst);
 
-            auto& ctx = getGlobalContext();
-            Type *ty = Type::getInt32Ty(ctx);
+            Type *ty = bo->getType();
+//            auto& ctx = getGlobalContext();
+//            Type *ty = Type::getInt32Ty(ctx);
 //            Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
             ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
 
@@ -162,7 +165,7 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
             Value *operand1 = bo->getOperand(1);
 
             if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
-              cout << "Error : operands aren't split !\n";
+              // cout << "Error : operands aren't split !\n";
               break;
             }
 
@@ -182,6 +185,16 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
                xa = 5, xb = 1, ya = 5, yb = 2
                za = 0 mod 10 = 0, zb = 10 * -1 + 0 / 10 = -1
                x = 10 * -1 + 0 = -10
+
+              int max = 2147483647; X
+              int min = -2147483648; Y
+              xa = 7, xb = 214748364, ya = 8, yb = -214748364
+              za = -1 mod 10 = -1, zb = 10 * 429496728 + -1 / 10 = 0 / 10 = -214748364
+              z = 10 * -214748364 + -1 = -2147483641
+
+              4294967280
+              2147483647
+
 
             */
             typeMap::iterator it = varsRegister.find(operand0);
@@ -237,29 +250,29 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
 // An example integer variable x is split into two variables a and b such that
 // a = x div 10 and b = x mod 10
 void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// Check if it has been split before
-  cout << "no of operands in this inst: " << inst.getNumOperands() << endl;
+  // cout << "no of operands in this inst: " << inst.getNumOperands() << endl;
   for (size_t i = 0; i < inst.getNumOperands(); ++i) {
-    cout << "getting operand\n";
+    // cout << "getting operand\n";
     Value* V = inst.getOperand(i);
-    cout << "got operand: " << endl;
+    // cout << "got operand: " << endl;
     if (variableCanSplit(V)) { // if valid operand, check if it's integer
-      cout << "is valid\n";
+      // cout << "is valid\n";
       if (!variableIsSplit(V)) {   // if valid and not split, split
-        cout << "is valid, not split\n";
+        // cout << "is valid, not split\n";
 //                  Type *ty = bo->getType();
 //                  Type *ty = V->getType();
         auto& ctx = getGlobalContext();
         Type *ty = Type::getInt32Ty(ctx);
 //                  Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
         ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
-        cout << "got ten " << endl;
+        // cout << "got ten " << endl;
 
         IRBuilder<> Builder(&inst);
 
         // Allocate registers for xa and xb
         Value* registerA = Builder.CreateAlloca(ty, 0, "x_a");
         Value* registerB = Builder.CreateAlloca(ty, 0, "x_b");
-        cout << "allocated registers for xa xb " << endl;
+        // cout << "allocated registers for xa xb " << endl;
 
         // Store V in those registers
         Builder.CreateStore(V, registerA, isVolatile);
@@ -267,19 +280,19 @@ void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// 
 
         Value* loadA = Builder.CreateLoad(registerA, isVolatile);
         Value* loadB = Builder.CreateLoad(registerB, isVolatile);
-        cout << "create load for xa xb " << endl;
-        cout << "load xa: "<< loadA->getValueName() << endl;
-        cout << "load xb: "<< loadB->getValueName() << endl;
+        // cout << "create load for xa xb " << endl;
+        // cout << "load xa: "<< loadA->getValueName() << endl;
+        // cout << "load xb: "<< loadB->getValueName() << endl;
 
-        Value* xaModTen = Builder.CreateURem(loadA, ten); //X_A mod 10
-        Value* xbDivTen = Builder.CreateUDiv(loadB, ten); //X_B div 10
+        Value* xaModTen = Builder.CreateSRem(loadA, ten); //X_A mod 10
+        Value* xbDivTen = Builder.CreateSDiv(loadB, ten); //X_B div 10
 
-        cout << "xa % 10 "<< xaModTen->getValueName() << endl;
-        cout << "xb / 10 "<< xbDivTen->getValueName() << endl;
+        // cout << "xa % 10 "<< xaModTen->getValueName() << endl;
+        // cout << "xb / 10 "<< xbDivTen->getValueName() << endl;
         Builder.CreateStore(xaModTen, registerA, isVolatile);
         Builder.CreateStore(xbDivTen, registerB, isVolatile);
 
-        cout << "create store for xa xb " << endl;
+        // cout << "create store for xa xb " << endl;
 
         Value* mapKey = V;
 
@@ -292,10 +305,10 @@ void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// 
 
 // Helper functions
 bool DataTypeObfuscation::variableCanSplit(Value *V){
-  cout << "check can split\n";
-  cout << V->getType()->isIntegerTy() << endl;
-  cout << V->getType()->isFloatTy() << endl;
-  cout << V->getType()->isFloatingPointTy() << endl;
+  // cout << "check can split\n";
+  // cout << V->getType()->isIntegerTy() << endl;
+  // cout << V->getType()->isFloatTy() << endl;
+  // cout << V->getType()->isFloatingPointTy() << endl;
   return V->getType()->isIntegerTy();
 }
 
