@@ -48,11 +48,13 @@ namespace {
     bool runOnFunction(Function &F);
     bool dataTypeObfuscate(Function *f);
 
-//void splitVariable(Value* V. Instruction &inst);
     bool variableCanSplit(Value* V);
     bool variableIsSplit(Value* V);
-
+    Value* parseOperand(Value* V);
+    bool instValidForSplit(Instruction &inst);
+    bool instValidForMerge(Instruction &inst);
     void splitVariable(bool isVolatile, Instruction &inst);
+    void mergeVariable(bool isVolatile, Value* V, Instruction &inst);
   };
 }
 
@@ -79,27 +81,25 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
       bool isVolatile = false;
       Instruction &inst = *instIter;
 
-      if (inst.isBinaryOp()) {
+      if (instValidForSplit(inst)) {
+        BinaryOperator *bo = cast<BinaryOperator>(&inst);
+        splitVariable(isVolatile, inst);
+        IRBuilder<> Builder(&inst);
+        Type *ty = bo->getType();
+
+        Value *operand0 = parseOperand(bo->getOperand(0));
+        Value *operand1 = parseOperand(bo->getOperand(1));
+
+        if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
+          break;
+        }
+
         switch (inst.getOpcode()) {
           case BinaryOperator::Add: {
-            BinaryOperator *bo = cast<BinaryOperator>(&inst);
-            splitVariable(isVolatile, inst);
-
-            IRBuilder<> Builder(&inst);
-
-            Type *ty = bo->getType();
 //            auto& ctx = getGlobalContext();
 //            Type *ty = Type::getInt32Ty(ctx);
 //            Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
             ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
-
-            Value *operand0 = bo->getOperand(0);
-            Value *operand1 = bo->getOperand(1);
-
-            if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
-              // cout << "Error : operands aren't split !\n";
-              break;
-            }
 
             /*
                From https://www.cs.ox.ac.uk/files/2936/RR-10-02.pdf:
@@ -131,43 +131,35 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
             Builder.CreateStore(zb, registerZb, isVolatile);
 
             Value* loadResultA = Builder.CreateLoad(registerZa, isVolatile);
-            Value* loadResultB = Builder.CreateLoad(registerZb, isVolatile);
 
-            Value* registerAns = Builder.CreateAlloca(ty, nullptr, "ans");
-            Value* tenZb = Builder.CreateMul(loadResultB, ten);
-            Value* answer = Builder.CreateAdd(tenZb, za);
-            Builder.CreateStore(answer, registerAns, isVolatile);
-            Value* loadAnswer = Builder.CreateLoad(registerAns, isVolatile);
-
-            // the key to access to the variables Z_A and Z_B from the ValueMap is Z_A.
-            varsRegister[loadResultA] = std::make_pair(registerZa, registerZb);
+            varsRegister[parseOperand(loadResultA)] = std::make_pair(registerZa, registerZb);
 
             // We replace all uses of the add result with the register that contains Z_A
-            inst.replaceAllUsesWith(loadAnswer);
+            inst.replaceAllUsesWith(loadResultA);
+
+//
+//            Value* loadResultB = Builder.CreateLoad(registerZb, isVolatile);
+//
+//            Value* registerAns = Builder.CreateAlloca(ty, nullptr, "ans");
+//            Value* tenZb = Builder.CreateMul(loadResultB, ten);
+//            Value* answer = Builder.CreateAdd(tenZb, za);
+//            Builder.CreateStore(answer, registerAns, isVolatile);
+//            Value* loadAnswer = Builder.CreateLoad(registerAns, isVolatile);
+//
+//            // the key to access to the variables Z_A and Z_B from the ValueMap is Z_A.
+//            varsRegister[loadResultA] = std::make_pair(registerZa, registerZb);
+//
+//            // We replace all uses of the add result with the register that contains Z_A
+//            inst.replaceAllUsesWith(loadAnswer);
 
             ++VarSplitted;
             break;
           }
           case BinaryOperator::Sub: {
-//            break;
-            BinaryOperator *bo = cast<BinaryOperator>(&inst);
-            splitVariable(isVolatile, inst);
-
-            IRBuilder<> Builder(&inst);
-
-            Type *ty = bo->getType();
 //            auto& ctx = getGlobalContext();
 //            Type *ty = Type::getInt32Ty(ctx);
 //            Type *ty = IntegerType::get(inst.getParent()->getContext(),sizeof(uint32_t)*8);//32bits
             ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
-
-            Value *operand0 = bo->getOperand(0);
-            Value *operand1 = bo->getOperand(1);
-
-            if(!(variableIsSplit(operand0) && variableIsSplit(operand1))){
-              // cout << "Error : operands aren't split !\n";
-              break;
-            }
 
             /*
                Given variable Z = X - Y, we split A and B as follows:
@@ -194,8 +186,6 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
 
               4294967280
               2147483647
-
-
             */
             typeMap::iterator it = varsRegister.find(operand0);
             Value *xa = Builder.CreateLoad(it->second.first, isVolatile);
@@ -219,25 +209,39 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
             Builder.CreateStore(zb, registerZb, isVolatile);
 
             Value* loadResultA = Builder.CreateLoad(registerZa, isVolatile);
-            Value* loadResultB = Builder.CreateLoad(registerZb, isVolatile);
 
-            Value* registerAns = Builder.CreateAlloca(ty, nullptr, "ans");
-            Value* tenZb = Builder.CreateMul(loadResultB, ten);
-            Value* answer = Builder.CreateAdd(tenZb, za);
-            Builder.CreateStore(answer, registerAns, isVolatile);
-            Value* loadAnswer = Builder.CreateLoad(registerAns, isVolatile);
-
-            // the key to access to the variables Z_A and Z_B from the ValueMap is Z_A.
-            varsRegister[loadResultA] = std::make_pair(registerZa, registerZb);
+            varsRegister[parseOperand(loadResultA)] = std::make_pair(registerZa, registerZb);
 
             // We replace all uses of the add result with the register that contains Z_A
-            inst.replaceAllUsesWith(loadAnswer);
+            inst.replaceAllUsesWith(loadResultA);
 
-            ++VarSplitted;
+//            Value* loadResultB = Builder.CreateLoad(registerZb, isVolatile);
+//
+//            Value* registerAns = Builder.CreateAlloca(ty, nullptr, "ans");
+//            Value* tenZb = Builder.CreateMul(loadResultB, ten);
+//            Value* answer = Builder.CreateAdd(tenZb, za);
+//            Builder.CreateStore(answer, registerAns, isVolatile);
+//            Value* loadAnswer = Builder.CreateLoad(registerAns, isVolatile);
+//
+//            // the key to access to the variables Z_A and Z_B from the ValueMap is Z_A.
+//            varsRegister[loadResultA] = std::make_pair(registerZa, registerZb);
+//
+//            // We replace all uses of the add result with the register that contains Z_A
+//            inst.replaceAllUsesWith(loadAnswer);
+//
+//            ++VarSplitted;
             break;
           }
           default: {
             break;
+          }
+        }
+      } else if (instValidForMerge(inst)) {
+        if (isa<StoreInst>(&inst)) {
+          Value* operand = parseOperand(inst.getOperand(0));
+
+          if (varsRegister.find(operand) != varsRegister.end()) {
+            mergeVariable(false, operand, inst);
           }
         }
       }
@@ -248,7 +252,7 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
 
 // Implementation of Variable Splitting
 // An example integer variable x is split into two variables a and b such that
-// a = x div 10 and b = x mod 10
+// xa = x div 10 and xb = x mod 10
 void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// Check if it has been split before
   // cout << "no of operands in this inst: " << inst.getNumOperands() << endl;
   for (size_t i = 0; i < inst.getNumOperands(); ++i) {
@@ -303,6 +307,27 @@ void DataTypeObfuscation::splitVariable(bool isVolatile, Instruction &inst) {// 
   }
 }
 
+// Implementation of Variable Merging
+// Two variables a and b such that a = x div 10 and b = x mod 10 will be merged
+// x = 10 * xb + xa
+void DataTypeObfuscation::mergeVariable(bool isVolatile, Value* V, Instruction &inst) {
+  typeMap::iterator it;
+  BinaryOperator *bo = cast<BinaryOperator>(&inst);
+  Type *ty = bo->getType();
+  ConstantInt *ten = (ConstantInt *)ConstantInt::get(ty, 10);
+
+  if ((it = varsRegister.find(V)) != varsRegister.end()) {
+    IRBuilder<> Builder(&inst);
+
+    Value *xa = Builder.CreateLoad(it->second.first, isVolatile);
+    Value *xb = Builder.CreateLoad(it->second.second, isVolatile);
+    Value* tenXb = Builder.CreateMul(xb, ten);
+    Value* answer = Builder.CreateAdd(tenXb, xa);
+
+    inst.setOperand(0, answer);
+  }
+}
+
 // Helper functions
 bool DataTypeObfuscation::variableCanSplit(Value *V){
   // cout << "check can split\n";
@@ -315,4 +340,31 @@ bool DataTypeObfuscation::variableCanSplit(Value *V){
 bool DataTypeObfuscation::variableIsSplit(Value *V){
   // Check if it exists in dictionary?
   return varsRegister.count(V) == 1;
+}
+
+/*
+ * ParseOperand is used to make a "clean" key for the ValueMap
+ * For instance if the value V is "load i32* %x, align 4" it will return %x and
+ * we will use the pointer to %x and not the pointer to load as key for the ValueMap
+ */
+Value* DataTypeObfuscation::parseOperand(Value* V) {
+  if(LoadInst *loadInst = dyn_cast<LoadInst>(V)){
+    return loadInst->getPointerOperand();
+  } else {
+    return V;
+  }
+}
+
+bool DataTypeObfuscation::instValidForSplit(Instruction &inst) {
+  switch(inst.getOpcode()){
+    case Instruction::Add:
+    case Instruction::Sub:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool DataTypeObfuscation::instValidForMerge(Instruction &inst) {
+  return isa<TerminatorInst>(&inst) || isa<StoreInst>(&inst) || isa<ReturnInst>(&inst);
 }
