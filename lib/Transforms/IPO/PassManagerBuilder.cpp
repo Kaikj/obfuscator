@@ -34,6 +34,7 @@
 #include "llvm/Transforms/Obfuscation/Split.h"
 #include "llvm/Transforms/Obfuscation/Substitution.h"
 #include "llvm/Transforms/Obfuscation/DeadCodeInsertion.h"
+#include "llvm/Transforms/Obfuscation/DataFlowTransformation.h"
 #include "llvm/CryptoUtils.h"
 
 using namespace llvm;
@@ -103,6 +104,9 @@ static cl::opt<bool> Split("spli", cl::init(false),
 
 static cl::opt<bool> DeadCodeInsertion("dci", cl::init(false),
                            cl::desc("Enable dead code insertion"));
+
+static cl::opt<bool> DataFlowTransformation("dft", cl::init(false),
+                                            cl::desc("Enable data flow transformations"));
 
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
@@ -195,6 +199,7 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
   MPM.add(createBogus(BogusControlFlow));
   MPM.add(createFlattening(Flattening));
   MPM.add(createDeadCodeInsertion(DeadCodeInsertion));
+  MPM.add(createDataFlowTransformation(DataFlowTransformation));
     
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.

@@ -6,6 +6,7 @@ add_llvm_library(LLVMObfuscation
   SplitBasicBlocks.cpp
   Flattening.cpp
   DeadCodeInsertion.cpp
+  DataFlowTransformation.cpp
   )
 
 add_dependencies(LLVMObfuscation intrinsics_gen)
