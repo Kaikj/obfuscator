@@ -194,7 +194,9 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
   MPM.add(createSplitBasicBlock(Split));
   MPM.add(createBogus(BogusControlFlow));
   MPM.add(createFlattening(Flattening));
-  MPM.add(createDataFlowTransformation(DataFlowTransformation));
+  if (DataFlowTransformation) {
+    MPM.add(createDataFlowTransformation());
+  }
     
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
