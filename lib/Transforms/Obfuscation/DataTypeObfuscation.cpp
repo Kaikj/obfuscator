@@ -118,10 +118,10 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
 
             Value* xaYa = Builder.CreateAdd(xa, ya); // za = xa + ya
             Value* xbYb = Builder.CreateAdd(xb, yb); // zb = xb + yb
-            Value* za = Builder.CreateURem(xaYa, ten, "z_a");
+            Value* za = Builder.CreateSRem(xaYa, ten, "z_a");
             Value* tenXbYb = Builder.CreateMul(xbYb, ten); // 10 * (xb + yb)
             Value* tenXbYbPlusXaYa = Builder.CreateAdd(tenXbYb, xaYa); // 10 * (xb + yb) + (xa + ya)
-            Value* zb = Builder.CreateUDiv(tenXbYbPlusXaYa, ten, "z_b"); // {10 * (xb + yb) + (xa + ya)} / 10 => Z_B
+            Value* zb = Builder.CreateSDiv(tenXbYbPlusXaYa, ten, "z_b"); // {10 * (xb + yb) + (xa + ya)} / 10 => Z_B
 
             Value* registerZa = Builder.CreateAlloca(ty, nullptr, "z_a");
             Value* registerZb = Builder.CreateAlloca(ty, nullptr, "z_b");
@@ -194,10 +194,10 @@ bool DataTypeObfuscation::dataTypeObfuscate(Function *f) {
 
             Value* xaYa = Builder.CreateSub(xa, ya); // za = xa - ya
             Value* xbYb = Builder.CreateSub(xb, yb); // zb = xb - yb
-            Value* za = Builder.CreateURem(xaYa, ten, "z_a");
+            Value* za = Builder.CreateSRem(xaYa, ten, "z_a");
             Value* tenXbYb = Builder.CreateMul(xbYb, ten); // 10 * (xb - yb)
             Value* tenXbYbPlusXaYa = Builder.CreateAdd(tenXbYb, xaYa); // 10 * (xb - yb) + (xa - ya)
-            Value* zb = Builder.CreateUDiv(tenXbYbPlusXaYa, ten, "z_b"); // {10 * (xb - yb) + (xa - ya)} / 10 => Z_B
+            Value* zb = Builder.CreateSDiv(tenXbYbPlusXaYa, ten, "z_b"); // {10 * (xb - yb) + (xa - ya)} / 10 => Z_B
 
             Value* registerZa = Builder.CreateAlloca(ty, nullptr, "z_a");
             Value* registerZb = Builder.CreateAlloca(ty, nullptr, "z_b");
