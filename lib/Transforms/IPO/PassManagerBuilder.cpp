@@ -35,6 +35,7 @@
 #include "llvm/Transforms/Obfuscation/Substitution.h"
 #include "llvm/Transforms/Obfuscation/DeadCodeInsertion.h"
 #include "llvm/Transforms/Obfuscation/DataFlowTransformation.h"
+#include "llvm/Transforms/Obfuscation/DataTypeObfuscation.h"
 #include "llvm/CryptoUtils.h"
 
 using namespace llvm;
@@ -107,6 +108,9 @@ static cl::opt<bool> DeadCodeInsertion("dci", cl::init(false),
 
 static cl::opt<bool> DataFlowTransformation("dft", cl::init(false),
                                             cl::desc("Enable data flow transformations"));
+
+static cl::opt<bool> DataTypeObfuscation("dto", cl::init(false),
+                           cl::desc("Enable data type obfuscation"));
 
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
@@ -200,7 +204,8 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
   MPM.add(createFlattening(Flattening));
   MPM.add(createDeadCodeInsertion(DeadCodeInsertion));
   MPM.add(createDataFlowTransformation(DataFlowTransformation));
-    
+  MPM.add(createDataTypeObfuscation(DataTypeObfuscation));
+
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
   if (OptLevel == 0) {
