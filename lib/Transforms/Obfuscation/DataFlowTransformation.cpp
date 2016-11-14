@@ -71,8 +71,10 @@ bool DataFlowTransformation::runOnModule(Module &M) {
 
   std::vector<Constant *> v(intToIndex.size(), 0);
   for (std::map<APSInt, ConstantInt *>::iterator it = intToIndex.begin(), ite = intToIndex.end(); it != ite; ++it) {
-    v[*(it->second->getValue().getRawData())] = ConstantInt::get(M.getContext(), it->first);
+    // v[*(it->second->getValue().getRawData())] = ConstantInt::get(M.getContext(), it->first);
+    v[*(it->second->getValue().getRawData())] = ConstantInt::get(M.getContext(), APSInt(32, 0));
   }
+
   // Type definitions
   ArrayType *IntArrayType_size = ArrayType::get(IntegerType::get(M.getContext(), 32), intToIndex.size());
 
@@ -89,6 +91,17 @@ bool DataFlowTransformation::runOnModule(Module &M) {
 
   globalArray->replaceAllUsesWith(newGlobalArray);
   globalArray->eraseFromParent();
+
+  for (Module::iterator F = M.begin(), FE = M.end(); F != FE; ++F) {
+    Function::iterator fIter = F->begin();
+    BasicBlock *firstBlock = fIter;
+
+    BasicBlock *newBlock = BasicBlock::Create(F->getContext(), "one", F, firstBlock);
+    for (std::map<APSInt, ConstantInt *>::iterator it = intToIndex.begin(), ite = intToIndex.end(); it != ite; ++it) {
+      GetElementPtrInst *gepInst = GetElementPtrInst::CreateInBounds(newGlobalArray, ArrayRef<Value *>(it->second), "pointer" + it->second->getValue().toString(7, false), newBlock);
+      new StoreInst(ConstantInt::get(F->getContext(), it->first), gepInst, newBlock);
+    }
+  }
 }
 
 void DataFlowTransformation::runOnFunction(Function &F) {
