@@ -11,9 +11,13 @@
 //
 //===----------------------------------------------------------------------------===//
 
+#include <cstdlib>
+#include <ctime>
+
 #include "llvm/Transforms/Obfuscation/DataFlowTransformation.h"
 #include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/CryptoUtils.h"
 
 #define DEBUG_TYPE "dataflowtransformation"
 
