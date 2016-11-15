@@ -135,7 +135,8 @@ void DataFlowTransformation::runOnFunction(Function &F) {
           }
 
           GetElementPtrInst *gepInst = GetElementPtrInst::Create(globalArray, ArrayRef<Value *>(std::vector<Value *> { ConstantInt::get(F.getContext(), APInt(32, 0)), it->second }), "array" + it->second->getValue().toString(10, false), inst);
-          *operand = gepInst;
+          LoadInst *loadI = new LoadInst(gepInst, "load" + it->second->getValue().toString(10, false), inst);
+          *operand = loadI;
 
           break;
         } else {
