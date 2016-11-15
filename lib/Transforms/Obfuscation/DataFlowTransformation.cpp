@@ -92,16 +92,78 @@ bool DataFlowTransformation::runOnModule(Module &M) {
   globalArray->replaceAllUsesWith(newGlobalArray);
   globalArray->eraseFromParent();
 
+  std::srand(std::time(0));
+  int numberOfBasicBlocks = (std::rand() % 3) + 1;
+  int correctBasicBlock = std::rand() % numberOfBasicBlocks;
+
   for (Module::iterator F = M.begin(), FE = M.end(); F != FE; ++F) {
     Function::iterator fIter = F->begin();
     BasicBlock *firstBlock = fIter;
+    BasicBlock *secondBlock = nullptr;
+    SwitchInst *switchI;
+    ConstantInt *numCase;
+    APSInt correctCase;
 
-    BasicBlock *newBlock = BasicBlock::Create(F->getContext(), "one", F, firstBlock);
-    for (std::map<APSInt, ConstantInt *>::iterator it = intToIndex.begin(), ite = intToIndex.end(); it != ite; ++it) {
-      GetElementPtrInst *gepInst = GetElementPtrInst::CreateInBounds(newGlobalArray, ArrayRef<Value *>(std::vector<Value *> {ConstantInt::get(M.getContext(), APInt(32, 0)), it->second}), "pointer" + it->second->getValue().toString(7, false), newBlock);
-      new StoreInst(ConstantInt::get(F->getContext(), it->first), gepInst, newBlock);
+    // Split first block after allocations
+    for (BasicBlock::iterator inst = fIter->begin(), instE = fIter->end(); inst != instE; ++inst) {
+      if (dyn_cast<AllocaInst>(inst)) {
+        continue;
+      }
+      secondBlock = fIter->splitBasicBlock(inst, "split");
+      break;
     }
+
+    if (secondBlock == nullptr) {
+      return false;
+    }
+
+    // Remove unconditional branch
+    TerminatorInst *ofFirstBlock = firstBlock->getTerminator();
+    if (ofFirstBlock != nullptr) {
+      ofFirstBlock->eraseFromParent();
+    }
+
+    // Create switch statement for first block
+    char scrambling_key[16];
+    cryptoutils->get_bytes(scrambling_key, 16);
+    GetElementPtrInst *gepInst = GetElementPtrInst::Create(newGlobalArray, ArrayRef<Value *>(std::vector<Value *> { ConstantInt::get(F->getContext(), APInt(32, 0)), ConstantInt::get(F->getContext(), APInt(32, intToIndex.size())) }), "switch", firstBlock);
+    LoadInst *loadI = new LoadInst(gepInst, "loading", firstBlock);
+    switchI = SwitchInst::Create(loadI, secondBlock, 0, firstBlock);
+
+    for (int i = 0; i < numberOfBasicBlocks; ++i) {
+      BasicBlock *newBlock = BasicBlock::Create(F->getContext(), "a" + std::to_string(i), F, secondBlock);
+      numCase = cast<ConstantInt>(ConstantInt::get(F->getContext(), APInt(32, cryptoutils->scramble32(switchI->getNumCases(), scrambling_key))));
+      switchI->addCase(numCase, newBlock);
+      for (std::map<APSInt, ConstantInt *>::iterator it = intToIndex.begin(), ite = intToIndex.end(); it != ite; ++it) {
+        GetElementPtrInst *gepInst = GetElementPtrInst::CreateInBounds(newGlobalArray, ArrayRef<Value *>(std::vector<Value *> {ConstantInt::get(M.getContext(), APInt(32, 0)), it->second}), "pointer" + (it->second->getValue()).toString(7, false) + std::to_string(i), newBlock);
+        if (i == correctBasicBlock) {
+          correctCase = APSInt(numCase->getValue(), false);
+          new StoreInst(ConstantInt::get(F->getContext(), it->first), gepInst, newBlock);
+        } else {
+          new StoreInst(ConstantInt::get(F->getContext(), APSInt(32, std::rand())), gepInst, newBlock);
+        }
+      }
+      BranchInst::Create(secondBlock, newBlock);
+    }
+
+    GetElementPtrInst *pointer = GetElementPtrInst::Create(newGlobalArray, ArrayRef<Value *>(std::vector<Value *> { ConstantInt::get(F->getContext(), APInt(32, 0)), ConstantInt::get(F->getContext(), APInt(32, intToIndex.size())) }), "pointing", gepInst);
+    APSInt random = APSInt(APInt(32, std::rand()), false);
+    APSInt random2 = correctCase - random;
+
+    APSInt randomModulo = random % APSInt(APInt(32, 10), false);
+    APSInt randomDivide = random / APSInt(APInt(32, 10), false);
+    BinaryOperator *bo = BinaryOperator::Create(BinaryOperator::Mul, ConstantInt::get(F->getContext(), randomDivide), ConstantInt::get(F->getContext(), APInt(32, 10)), "inst1", gepInst);
+    BinaryOperator *bo2 = BinaryOperator::Create(BinaryOperator::Add, bo, ConstantInt::get(F->getContext(), randomModulo), "inst2", gepInst);
+
+    APSInt randomModulo2 = random2 % APSInt(APInt(32, 10), false);
+    APSInt randomDivide2 = random2 / APSInt(APInt(32, 10), false);
+    BinaryOperator *bo3 = BinaryOperator::Create(BinaryOperator::Mul, ConstantInt::get(F->getContext(), randomDivide2), ConstantInt::get(F->getContext(), APInt(32, 10)), "inst3", gepInst);
+    BinaryOperator *bo4 = BinaryOperator::Create(BinaryOperator::Add, bo3, ConstantInt::get(F->getContext(), randomModulo2), "inst4", gepInst);
+
+    BinaryOperator *bo5 = BinaryOperator::Create(BinaryOperator::Add, bo2, bo4, "inst5", gepInst);
+    new StoreInst(bo5, pointer, gepInst);
   }
+  return true;
 }
 
 void DataFlowTransformation::runOnFunction(Function &F) {
