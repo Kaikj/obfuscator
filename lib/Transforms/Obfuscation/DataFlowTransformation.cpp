@@ -25,8 +25,6 @@ using namespace llvm;
 
 STATISTIC(Transformed, "Data flow transformed");
 
-// static cl::opt<string> FunctionName();
-
 namespace {
 struct DataFlowTransformation : public ModulePass {
   static char ID;
@@ -69,13 +67,14 @@ bool DataFlowTransformation::runOnModule(Module &M) {
   ConstantInt *zero = ConstantInt::get(M.getContext(), APInt(32, 0));
   globalArray->setInitializer(zero);
 
+  // Run passes on functions
   for (Module::iterator F = M.begin(), FE = M.end(); F != FE; ++F) {
     runOnFunction(*F);
   }
 
+  // Initialize the vector to 0 since we want to obfuscate the data flow
   std::vector<Constant *> v(intToIndex.size() + 1, 0);
   for (std::map<APSInt, ConstantInt *>::iterator it = intToIndex.begin(), ite = intToIndex.end(); it != ite; ++it) {
-    // v[*(it->second->getValue().getRawData())] = ConstantInt::get(M.getContext(), it->first);
     v[*(it->second->getValue().getRawData())] = ConstantInt::get(M.getContext(), APSInt(32, 0));
   }
   v[intToIndex.size()] = ConstantInt::get(M.getContext(), APSInt(32, 0));
@@ -94,13 +93,16 @@ bool DataFlowTransformation::runOnModule(Module &M) {
   Constant *values = ConstantArray::get(IntArrayType_size, ArrayRef<Constant *>(v));
   newGlobalArray->setInitializer(values);
 
+  // Replace the old array
   globalArray->replaceAllUsesWith(newGlobalArray);
   globalArray->eraseFromParent();
 
+  // Randomly decide number of basic blocks
   std::srand(std::time(0));
-  int numberOfBasicBlocks = (std::rand() % 3) + 1;
+  int numberOfBasicBlocks = (std::rand() % 3) + 2;
   int correctBasicBlock = std::rand() % numberOfBasicBlocks;
 
+  // Obfuscate the data flow for the assignment through pointers to the global array
   for (Module::iterator F = M.begin(), FE = M.end(); F != FE; ++F) {
     Function::iterator fIter = F->begin();
     BasicBlock *firstBlock = fIter;
@@ -109,7 +111,7 @@ bool DataFlowTransformation::runOnModule(Module &M) {
     ConstantInt *numCase;
     APSInt correctCase;
 
-    // Split first block after allocations
+    // Split first block after allocations instructions
     for (BasicBlock::iterator inst = fIter->begin(), instE = fIter->end(); inst != instE; ++inst) {
       if (dyn_cast<AllocaInst>(inst)) {
         continue;
@@ -135,6 +137,7 @@ bool DataFlowTransformation::runOnModule(Module &M) {
     LoadInst *loadI = new LoadInst(gepInst, "loading", firstBlock);
     switchI = SwitchInst::Create(loadI, secondBlock, 0, firstBlock);
 
+    // Randomly insert correct and wrong blocks
     for (int i = 0; i < numberOfBasicBlocks; ++i) {
       BasicBlock *newBlock = BasicBlock::Create(F->getContext(), "a" + std::to_string(i), F, secondBlock);
       numCase = cast<ConstantInt>(ConstantInt::get(F->getContext(), APInt(32, cryptoutils->scramble32(switchI->getNumCases(), scrambling_key))));
@@ -151,6 +154,7 @@ bool DataFlowTransformation::runOnModule(Module &M) {
       BranchInst::Create(secondBlock, newBlock);
     }
 
+    // Obfuscate the control flow to the actual assignments through pointer aliases
     GetElementPtrInst *pointer = GetElementPtrInst::Create(newGlobalArray, ArrayRef<Value *>(std::vector<Value *> { ConstantInt::get(F->getContext(), APInt(32, 0)), ConstantInt::get(F->getContext(), APInt(32, intToIndex.size())) }), "pointing", gepInst);
     APSInt random = APSInt(APInt(32, std::rand()), false);
     APSInt random2 = correctCase - random;
@@ -184,6 +188,7 @@ void DataFlowTransformation::runOnFunction(Function &F) {
       }
 
       for (Use *operand = inst->op_begin(), *operandE = inst->op_end(); operand != operandE; ++operand) {
+        // Operations on interesting operands
         if (ConstantInt *CI = dyn_cast<ConstantInt>(operand->get())) {
           Module *M = F.getParent();
 
