@@ -105,9 +105,6 @@ bool DataFlowTransformation::runOnModule(Module &M) {
 }
 
 void DataFlowTransformation::runOnFunction(Function &F) {
-  // Define types
-  IntegerType *Int32 = IntegerType::get(F.getContext(), 32);
-  PointerType *IntPointerType = PointerType::get(Int32, 0);
 
   for (Function::iterator bb = F.begin(), bbE = F.end(); bb != bbE; ++bb) {
     for (BasicBlock::iterator inst = bb->begin(), instE = bb->end(); inst != instE; ++inst) {
