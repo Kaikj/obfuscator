@@ -69,14 +69,15 @@ bool DataFlowTransformation::runOnModule(Module &M) {
     runOnFunction(*F);
   }
 
-  std::vector<Constant *> v(intToIndex.size(), 0);
+  std::vector<Constant *> v(intToIndex.size() + 1, 0);
   for (std::map<APSInt, ConstantInt *>::iterator it = intToIndex.begin(), ite = intToIndex.end(); it != ite; ++it) {
     // v[*(it->second->getValue().getRawData())] = ConstantInt::get(M.getContext(), it->first);
     v[*(it->second->getValue().getRawData())] = ConstantInt::get(M.getContext(), APSInt(32, 0));
   }
+  v[intToIndex.size()] = ConstantInt::get(M.getContext(), APSInt(32, 0));
 
   // Type definitions
-  ArrayType *IntArrayType_size = ArrayType::get(IntegerType::get(M.getContext(), 32), intToIndex.size());
+  ArrayType *IntArrayType_size = ArrayType::get(IntegerType::get(M.getContext(), 32), intToIndex.size() + 1);
 
   // Global variable definitions
   StringRef newArrayName = (getArrayName(M) + "new").str();
