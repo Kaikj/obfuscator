@@ -105,6 +105,7 @@ bool DataFlowTransformation::runOnModule(Module &M) {
 }
 
 void DataFlowTransformation::runOnFunction(Function &F) {
+  ++Transformed;
 
   for (Function::iterator bb = F.begin(), bbE = F.end(); bb != bbE; ++bb) {
     for (BasicBlock::iterator inst = bb->begin(), instE = bb->end(); inst != instE; ++inst) {
