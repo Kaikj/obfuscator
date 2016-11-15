@@ -203,9 +203,11 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
   MPM.add(createBogus(BogusControlFlow));
   MPM.add(createFlattening(Flattening));
   MPM.add(createDeadCodeInsertion(DeadCodeInsertion));
-  MPM.add(createDataFlowTransformation(DataFlowTransformation));
   MPM.add(createDataTypeObfuscation(DataTypeObfuscation));
-
+  if (DataFlowTransformation) {
+    MPM.add(createDataFlowTransformation());
+  }
+    
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
   if (OptLevel == 0) {
