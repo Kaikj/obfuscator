@@ -104,7 +104,7 @@ bool DataFlowTransformation::runOnModule(Module &M) {
 
   // Obfuscate the data flow for the assignment through pointers to the global array
   for (Module::iterator F = M.begin(), FE = M.end(); F != FE; ++F) {
-    if (F->hasExternalLinkage()) {
+    if (F->isDeclaration()) {
       continue;
     }
     Function::iterator fIter = F->begin();
